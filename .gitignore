@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+material_master.db
+.env
