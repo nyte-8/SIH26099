@@ -361,7 +361,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // Calculate metrics
             let totalSourceRecords = 0;
             materials.forEach(m => {
-                totalSourceRecords += (m.linked_records_count || m.total_records || 1);
+                const c = m.record_count ?? m.linked_records_count ?? m.total_records ?? (m.linked_records ? m.linked_records.length : 1);
+                totalSourceRecords += c;
             });
 
             if (statTotalRecords) statTotalRecords.textContent = totalSourceRecords;
@@ -388,7 +389,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         registryGrid.innerHTML = materials.map(m => {
-            const linkedCount = m.linked_records_count || m.records_count || (m.linked_records ? m.linked_records.length : 1);
+            const count = m.record_count ?? m.linked_records_count ?? m.records_count ?? (m.linked_records ? m.linked_records.length : 1);
+            const countText = `${count} ${count === 1 ? 'CPSE Record' : 'CPSE Records'}`;
+
             let attrsSnippet = '';
             if (m.attributes && typeof m.attributes === 'object') {
                 const entries = Object.entries(m.attributes).filter(([k, v]) => v !== null && v !== '');
@@ -402,8 +405,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="registry-card__top">
                         <span class="eyebrow">${escapeHtml(m.category || 'Uncategorized')}</span>
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="status-pill">${linkedCount} CPSE Records</span>
-                            <span class="registry-card__chevron">▼ Details</span>
+                            <span class="status-pill card-count-pill">${escapeHtml(countText)}</span>
+                            <span class="registry-card__chevron"><span class="chevron-icon">▼</span> Details</span>
                         </div>
                     </div>
                     <strong class="registry-card__code">${escapeHtml(m.common_code)}</strong>
@@ -413,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <!-- Expandable Dropdown Drawer for Attached CPSE Records -->
                     <div class="registry-card__drawer" id="drawer-${escapeHtml(m.common_code)}">
                         <div class="drawer-header">
-                            <span>📦 Attached CPSE Source Records (${linkedCount})</span>
+                            <span class="drawer-header-count">📦 Attached CPSE Source Records (${count})</span>
                             <span style="font-size:10px; color:var(--ink-faint);">Click card to collapse</span>
                         </div>
                         <div class="attached-records-list">
@@ -457,6 +460,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 drawerList.innerHTML = '<p class="output__empty" style="padding:8px;">No source CPSE records linked to this code.</p>';
                 return;
             }
+
+            // Dynamically update card count to match actual database records
+            const exactCount = records.length;
+            const exactCountText = `${exactCount} ${exactCount === 1 ? 'CPSE Record' : 'CPSE Records'}`;
+            const pill = cardElement.querySelector('.card-count-pill');
+            if (pill) pill.textContent = exactCountText;
+            const headerCount = cardElement.querySelector('.drawer-header-count');
+            if (headerCount) headerCount.textContent = `📦 Attached CPSE Source Records (${exactCount})`;
 
             drawerList.innerHTML = records.map(r => {
                 const scoreDisplay = r.tolerance_score !== null && r.tolerance_score !== undefined
