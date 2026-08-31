@@ -792,6 +792,178 @@ def upload_csv():
         return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 
+SAMPLE_CPSE_DATASET = [
+    {
+        "CPSE_ID": "ONGC",
+        "Material_Code": "ONGC-PIP-101",
+        "Description": "SS 304 Seamless Pipe 2 inch Sch 40",
+        "Specification": "Stainless Steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm",
+        "Unit_of_Measure": "MTR",
+        "Material_Type": "Piping",
+        "Procurement_Date": "2024-01-15"
+    },
+    {
+        "CPSE_ID": "IOCL",
+        "Material_Code": "IOCL-P-992",
+        "Description": "Pipe Stainless Steel 50mm Dia Sch40",
+        "Specification": "SS304 grade seamless piping, nominal diameter 50mm, wall schedule 40, 6m length",
+        "Unit_of_Measure": "M",
+        "Material_Type": "Pipes & Tubes",
+        "Procurement_Date": "2024-02-20"
+    },
+    {
+        "CPSE_ID": "GAIL",
+        "Material_Code": "GAIL-MAT-440",
+        "Description": "PIPE, SS, 50 MM NOMINAL BORE, SCH 40",
+        "Specification": "Stainless steel pipe 50mm NB sch 40 length 6000mm for gas processing unit",
+        "Unit_of_Measure": "NOS",
+        "Material_Type": "Piping Materials",
+        "Procurement_Date": "2024-03-10"
+    },
+    {
+        "CPSE_ID": "ONGC",
+        "Material_Code": "ONGC-VAL-502",
+        "Description": "Ball Valve 2 inch 150# Flanged SS316",
+        "Specification": "Full bore ball valve, size 50mm (2 inch), rating Class 150 (20 bar), SS316 body",
+        "Unit_of_Measure": "NOS",
+        "Material_Type": "Valves",
+        "Procurement_Date": "2024-01-18"
+    },
+    {
+        "CPSE_ID": "IOCL",
+        "Material_Code": "IOCL-VLV-331",
+        "Description": "SS316 Ball Valve Size 50mm PN20 Flanged",
+        "Specification": "Stainless steel 316 flanged ball valve, 50mm nominal size, 20 bar pressure rating",
+        "Unit_of_Measure": "EA",
+        "Material_Type": "Valves & Fittings",
+        "Procurement_Date": "2024-02-25"
+    },
+    {
+        "CPSE_ID": "BHEL",
+        "Material_Code": "BHEL-FST-801",
+        "Description": "Hex Bolt M12 x 50mm Grade 8.8 High Tensile",
+        "Specification": "M12 hex head bolt, 50mm length, 12mm size, high tensile grade 8.8 carbon steel with nut",
+        "Unit_of_Measure": "SET",
+        "Material_Type": "Fasteners",
+        "Procurement_Date": "2024-01-22"
+    },
+    {
+        "CPSE_ID": "NTPC",
+        "Material_Code": "NTPC-BOLT-104",
+        "Description": "Bolt Hexagonal 12mm x 50mm Gr 8.8 Carbon Steel",
+        "Specification": "Hex bolt 12mm dia, length 50mm, Grade 8.8 CS zinc plated for turbine casing",
+        "Unit_of_Measure": "NOS",
+        "Material_Type": "Hardware",
+        "Procurement_Date": "2024-02-14"
+    },
+    {
+        "CPSE_ID": "SAIL",
+        "Material_Code": "SAIL-CBL-603",
+        "Description": "XLPE Power Cable 3 Core 2.5 sqmm 1.1kV Copper",
+        "Specification": "3C x 2.5 sq mm copper conductor, XLPE insulated, PVC sheathed armored cable 1100V",
+        "Unit_of_Measure": "MTR",
+        "Material_Type": "Electrical",
+        "Procurement_Date": "2024-03-01"
+    },
+    {
+        "CPSE_ID": "BHEL",
+        "Material_Code": "BHEL-EL-209",
+        "Description": "Copper Cable 3C x 2.5mm2 1.1kV Armoured",
+        "Specification": "3 core copper electrical power cable, cross section 2.5 sqmm, voltage rating 1.1 kV",
+        "Unit_of_Measure": "M",
+        "Material_Type": "Cables & Wiring",
+        "Procurement_Date": "2024-03-12"
+    },
+    {
+        "CPSE_ID": "NTPC",
+        "Material_Code": "NTPC-PMP-701",
+        "Description": "Centrifugal Water Pump 50 m3/hr Head 40m",
+        "Specification": "End suction centrifugal pump, flow rate 50 m3/h, head 40m, Cast Iron casing, 7.5kW motor",
+        "Unit_of_Measure": "SET",
+        "Material_Type": "Pumps & Turbines",
+        "Procurement_Date": "2024-02-28"
+    },
+    {
+        "CPSE_ID": "SAIL",
+        "Material_Code": "SAIL-PLT-110",
+        "Description": "Mild Steel Plate 10mm x 1500mm x 3000mm IS 2062",
+        "Specification": "Structural mild steel plate, thickness 10mm, width 1500mm, length 3000mm, Grade E250",
+        "Unit_of_Measure": "TON",
+        "Material_Type": "Plates & Sheets",
+        "Procurement_Date": "2024-01-30"
+    },
+    {
+        "CPSE_ID": "GAIL",
+        "Material_Code": "GAIL-GSK-905",
+        "Description": "Spiral Wound Gasket 50mm NB Class 150 SS316 / Graphite",
+        "Specification": "Metallic spiral wound gasket with inner ring, size 50mm, 150# rating, 316SS graphite filler",
+        "Unit_of_Measure": "NOS",
+        "Material_Type": "Gaskets",
+        "Procurement_Date": "2024-03-15"
+    }
+]
+
+
+@app.route('/api/v1/sample-dataset', methods=['GET'])
+def get_sample_dataset():
+    """Returns benchmark multi-CPSE messy dataset for instant evaluation demo."""
+    return jsonify({
+        "status": "success",
+        "count": len(SAMPLE_CPSE_DATASET),
+        "dataset": SAMPLE_CPSE_DATASET
+    }), 200
+
+
+@app.route('/api/v1/load-sample-dataset', methods=['POST'])
+def load_sample_dataset():
+    """Ingests the multi-CPSE benchmark dataset and returns detailed deduplication metrics."""
+    try:
+        from matching import process_single_material
+        from uuid import uuid4
+        batch_id = f"demo-batch-{uuid4().hex[:8]}"
+        results = []
+
+        for idx, row in enumerate(SAMPLE_CPSE_DATASET, start=1):
+            res = process_single_material(
+                cpse_id=row['CPSE_ID'],
+                material_code=row['Material_Code'],
+                description=row['Description'],
+                specification=row['Specification'],
+                unit_of_measure=row.get('Unit_of_Measure'),
+                material_type=row.get('Material_Type'),
+                procurement_date=row.get('Procurement_Date'),
+                source_system_id=f"ERP_{row['CPSE_ID']}",
+                import_batch_id=batch_id,
+                source_record_id=str(idx),
+                changed_by="demo_loader"
+            )
+            results.append({
+                "row": idx,
+                "cpse_id": row['CPSE_ID'],
+                "material_code": row['Material_Code'],
+                "common_code": res.get('common_code'),
+                "category": res.get('category'),
+                "status": res.get('status'),
+                "tolerance_score": res.get('tolerance_score'),
+                "standard_description": res.get('standard_description'),
+            })
+
+        unique_codes = len(set(r['common_code'] for r in results if r.get('common_code')))
+        total_rows = len(results)
+        reduction_pct = round((1 - (unique_codes / total_rows)) * 100, 1) if total_rows else 0.0
+
+        return jsonify({
+            "status": "success",
+            "batch_id": batch_id,
+            "total_ingested": total_rows,
+            "unique_cnmc_created": unique_codes,
+            "duplicate_reduction_pct": reduction_pct,
+            "results": results
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to load sample dataset: {str(e)}"}), 500
+
+
 @app.route('/')
 def index():
     """Serves the frontend."""
@@ -801,3 +973,4 @@ def index():
 if __name__ == '__main__':
     print("Starting Flask server on http://127.0.0.1:5000")
     app.run(debug=True, port=5000)
+

@@ -3,24 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unified Material Master — CNMC Registry</title>
+    <title>Unified Material Master — CNMC National Registry</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-shell">
         <aside class="sidebar" aria-label="Primary">
             <div class="sidebar__brand">
-                <div class="sidebar__mark" aria-hidden="true">UM</div>
+                <div class="sidebar__mark" aria-hidden="true">🇮🇳</div>
                 <div>
-                    <p class="sidebar__name">Material Control</p>
-                    <p class="sidebar__kicker">UN Master Engine v5.2</p>
+                    <p class="sidebar__name">CNMC Master</p>
+                    <p class="sidebar__kicker">One Nation – One Material Code</p>
                 </div>
             </div>
 
-            <button class="nav-item tab-btn cta-add" data-tab="tab-upload" type="button">
+            <button class="nav-item tab-btn cta-add active" data-tab="tab-upload" type="button">
                 <span class="nav-item__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
                 </span>
@@ -28,14 +29,14 @@
             </button>
 
             <nav class="sidebar__nav">
-                <p class="sidebar__label">Operations</p>
+                <p class="sidebar__label">Core Operations</p>
                 <button class="nav-item tab-btn active" data-tab="tab-upload" type="button">
                     <span class="nav-item__icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
                     </span>
                     <span>
                         <strong>Standardization &amp; Resemblance</strong>
-                        <em>Single entry or bulk CSV</em>
+                        <em>Single entry, CSV &amp; 1-click demo</em>
                     </span>
                 </button>
                 <button class="nav-item tab-btn" data-tab="tab-registry" type="button">
@@ -43,8 +44,8 @@
                         <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                     </span>
                     <span>
-                        <strong>UN Material Library</strong>
-                        <em>National material codes</em>
+                        <strong>National Material Library</strong>
+                        <em>Harmonized CNMC codes</em>
                     </span>
                 </button>
                 <button class="nav-item tab-btn" data-tab="tab-admin" type="button">
@@ -52,15 +53,35 @@
                         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="2"/><path d="M4.5 20c1.4-4 4.2-6 7.5-6s6.1 2 7.5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                     </span>
                     <span>
-                        <strong>Drafting Board</strong>
-                        <em>Approve or mint a new code</em>
+                        <strong>Governance &amp; Review Queue</strong>
+                        <em>Human-in-the-loop validation</em>
+                    </span>
+                </button>
+                
+                <p class="sidebar__label" style="margin-top:12px;">Strategic Intelligence</p>
+                <button class="nav-item tab-btn" data-tab="tab-analytics" type="button">
+                    <span class="nav-item__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M18 20V10M12 20V4M6 20v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span>
+                    <span>
+                        <strong>Analytics &amp; Demand Aggregation</strong>
+                        <em>Deduplication charts &amp; savings</em>
+                    </span>
+                </button>
+                <button class="nav-item tab-btn" data-tab="tab-erp" type="button">
+                    <span class="nav-item__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="currentColor" stroke-width="2"/></svg>
+                    </span>
+                    <span>
+                        <strong>SAP / ERP &amp; Audit Trail</strong>
+                        <em>MARA/MARC sync &amp; governance logs</em>
                     </span>
                 </button>
             </nav>
 
             <div class="sidebar__foot">
-                <p class="sidebar__live"><span class="pulse-dot" aria-hidden="true"></span> System live</p>
-                <p>CPSE Network · SIH 2026</p>
+                <p class="sidebar__live"><span class="pulse-dot" aria-hidden="true"></span> Master Registry Online</p>
+                <p>CPSE Multi-Enterprise Network</p>
             </div>
         </aside>
 
@@ -72,43 +93,44 @@
                 </div>
                 <div class="topbar__right">
                     <dl class="topbar__meta">
-                        <div><dt>Drawing</dt><dd>CNMC-SYS-01</dd></div>
-                        <div><dt>Revision</dt><dd>C</dd></div>
-                        <div><dt>Network</dt><dd>CPSE</dd></div>
+                        <div><dt>Framework</dt><dd>One Nation One Code</dd></div>
+                        <div><dt>Governance</dt><dd>3-Band Confidence</dd></div>
+                        <div><dt>Consortium</dt><dd>CPSEs</dd></div>
                     </dl>
-                    <span class="live-pill"><span class="pulse-dot" aria-hidden="true"></span> <span id="statTotalRecords">0</span> codes on file</span>
+                    <span class="live-pill"><span class="pulse-dot" aria-hidden="true"></span> <span id="statTotalRecords">0</span> records harmonized</span>
                 </div>
             </header>
 
             <main class="stage">
+                <!-- TAB 1: Standardization & Resemblance -->
                 <div id="tab-upload" class="tab-content active">
                     <div class="stat-strip">
                         <div class="stat-card">
                             <div class="stat-card__top">
-                                <span class="stat-card__title">Master Index</span>
-                                <span class="status-pill">ACTIVE</span>
+                                <span class="stat-card__title">Harmonization Progress</span>
+                                <span class="status-pill">LIVE SYNC</span>
                             </div>
                             <div class="stat-card__icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-3 8 3-8 3-8-3z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 12l8 3 8-3M4 17l8 3 8-3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
                             </div>
                             <strong id="statRecordsBig">0 Records</strong>
-                            <span class="stat-card__hint">Permanent CNMC registry, growing with every submission</span>
+                            <span class="stat-card__hint">Total CPSE legacy materials analyzed</span>
                         </div>
                         <div class="stat-card">
                             <div class="stat-card__top">
-                                <span class="stat-card__title">Master Database</span>
+                                <span class="stat-card__title">National Material Codes</span>
                             </div>
                             <strong id="statUniqueCodes">0</strong>
-                            <span class="stat-card__hint">Standardized common codes on file</span>
+                            <span class="stat-card__hint">Unique CNMC codes created</span>
                             <div class="stat-card__badges">
-                                <span class="mini-badge">ZERO HALLUCINATIONS</span>
-                                <span class="mini-badge">OFFICIAL CNMC</span>
+                                <span class="mini-badge">ONE NATION ONE CODE</span>
+                                <span class="mini-badge" id="heroReductionRate">0% Deduplicated</span>
                             </div>
                         </div>
                         <div class="stat-card stat-card--dark" id="heroCard">
-                            <span class="stat-card__eyebrow">Last assigned official code</span>
+                            <span class="stat-card__eyebrow">Last Standardized CNMC Code</span>
                             <strong class="stat-card__hero-code" id="heroCode">—</strong>
-                            <span class="stat-card__hero-desc" id="heroDesc">Submit a record to stamp its national code here.</span>
+                            <span class="stat-card__hero-desc" id="heroDesc">Submit a record or run benchmark demo to view identity.</span>
                             <span class="match-badge hidden" id="heroMatch">✓ 0% match</span>
                         </div>
                     </div>
@@ -116,59 +138,84 @@
                     <div class="split">
                         <section class="panel" aria-labelledby="input-heading">
                             <div class="panel__intro">
-                                <h2 id="input-heading">Standardization Engine</h2>
-                                <p>Type rough item descriptions or specs. The engine matches the national register before minting a trusted code every CPSE can use.</p>
+                                <h2 id="input-heading">Standardization &amp; Resemblance Engine</h2>
+                                <p>Ingest rough CPSE descriptions or legacy material codes. AI normalizes SI units, extracts technical attributes, and matches the National Register.</p>
                             </div>
 
                             <div class="mode-toggle" role="radiogroup" aria-label="Input mode">
                                 <label class="mode-toggle__option">
                                     <input type="radio" name="mode" value="single" checked>
-                                    <span>Single entry</span>
+                                    <span>Single Entry</span>
                                 </label>
                                 <label class="mode-toggle__option">
                                     <input type="radio" name="mode" value="bulk">
-                                    <span>Bulk CSV upload</span>
+                                    <span>Bulk CSV Migration</span>
+                                </label>
+                                <label class="mode-toggle__option">
+                                    <input type="radio" name="mode" value="demo">
+                                    <span>⚡ 1-Click Multi-CPSE Benchmark</span>
                                 </label>
                             </div>
 
+                            <!-- Single Entry Form -->
                             <form id="materialForm" class="form" novalidate>
                                 <div class="form-grid">
                                     <div class="field">
-                                        <label for="cpse_id">Origin CPSE / Plant entity</label>
-                                        <input type="text" id="cpse_id" name="cpse_id" placeholder="CPSE_A" required autocomplete="off">
+                                        <label for="cpse_id">Origin CPSE / Plant Entity</label>
+                                        <input type="text" id="cpse_id" name="cpse_id" placeholder="e.g. ONGC / IOCL / SAIL / BHEL" required autocomplete="off">
                                     </div>
                                     <div class="field">
-                                        <label for="material_code">Raw CPSE item code</label>
-                                        <input type="text" id="material_code" name="material_code" placeholder="MAT-1001" required autocomplete="off">
+                                        <label for="material_code">Raw CPSE Item Code</label>
+                                        <input type="text" id="material_code" name="material_code" placeholder="e.g. ONGC-P-101" required autocomplete="off">
                                     </div>
                                 </div>
                                 <div class="field">
-                                    <label for="description">Material description</label>
-                                    <textarea id="description" name="description" rows="2" placeholder="SS Pipe 50mm" required></textarea>
+                                    <label for="description">Material Description (Raw)</label>
+                                    <textarea id="description" name="description" rows="2" placeholder="e.g. SS 304 Seamless Pipe 2 inch Sch 40" required></textarea>
                                 </div>
                                 <div class="field">
-                                    <label for="specification">Uses &amp; specification</label>
-                                    <textarea id="specification" name="specification" rows="3" placeholder="Stainless steel, 50mm nominal bore" required></textarea>
+                                    <label for="specification">Technical Specifications &amp; Uses</label>
+                                    <textarea id="specification" name="specification" rows="3" placeholder="e.g. Stainless steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm" required></textarea>
                                 </div>
-                                <p class="field-hint">💡 Workers can type rough terms like "ss" or "stainless steel" — the engine calculates the closest matching efficiency automatically.</p>
+                                <p class="field-hint">💡 Auto-converts imperial units (2 inch &rarr; 50.8mm) and standardizes terminology (SS &harr; Stainless Steel).</p>
                                 <button type="submit" id="submitBtn" class="btn-primary">
-                                    ✓ Standardize &amp; Adopt Official Code
+                                    ✓ Standardize &amp; Harmonize with CNMC
                                 </button>
                             </form>
 
+                            <!-- Bulk CSV Form -->
                             <form id="csvForm" class="form hidden" novalidate>
                                 <div class="field">
-                                    <label for="csvFile">CSV file</label>
+                                    <label for="csvFile">Legacy CPSE CSV File</label>
                                     <div class="file-well">
                                         <input type="file" id="csvFile" name="csvFile" accept=".csv" required>
-                                        <p class="file-well__hint">Expected columns: CPSE_ID, Material_Code, Description, Specification, Unit_of_Measure, Material_Type, Procurement_Date</p>
+                                        <p class="file-well__hint">Expected Headers: CPSE_ID, Material_Code, Description, Specification, Unit_of_Measure, Material_Type, Procurement_Date</p>
                                     </div>
                                 </div>
-                                <p class="file-well__hint">Upload legacy CPSE material master data for migration.</p>
+                                <p class="file-well__hint">Transactional Migration: Supports auto-validation, two-phase staging, and full batch rollback.</p>
                                 <button type="submit" id="uploadCsvBtn" class="btn-primary">
-                                    Upload and process
+                                    Upload &amp; Migrate Batch
                                 </button>
                             </form>
+
+                            <!-- 1-Click Benchmark Demo Form -->
+                            <div id="demoForm" class="form hidden">
+                                <div class="demo-box">
+                                    <div class="demo-box__header">
+                                        <span class="demo-badge">1-CLICK BENCHMARK EVALUATION</span>
+                                        <h3>Simulate Multi-CPSE Master Consolidation</h3>
+                                    </div>
+                                    <p>Loads 12 realistic material records across <strong>ONGC, IOCL, GAIL, SAIL, BHEL, NTPC</strong> with imperial/metric variations, pressure ratings, and duplicate descriptions to showcase instant duplicate detection and CNMC code unification.</p>
+                                    <div class="demo-stats-preview">
+                                        <span>• 6 Major CPSEs</span>
+                                        <span>• Pipes, Valves, Bolts, Cables, Pumps</span>
+                                        <span>• Cross-CPSE Demand Aggregation</span>
+                                    </div>
+                                    <button type="button" id="runDemoBtn" class="btn-primary btn-demo">
+                                        🚀 Ingest 1-Click Multi-CPSE Benchmark Dataset
+                                    </button>
+                                </div>
+                            </div>
 
                             <div id="uploadResult" class="upload-result"></div>
                         </section>
@@ -176,43 +223,44 @@
                         <aside class="rail" aria-labelledby="result-heading">
                             <section class="panel panel--quiet">
                                 <div class="panel__intro">
-                                    <p class="eyebrow">AI Resemblance Inspector</p>
-                                    <h2 id="result-heading">Generated identity</h2>
+                                    <p class="eyebrow">AI Resemblance &amp; Attribute Inspector</p>
+                                    <h2 id="result-heading">Standardized National Identity</h2>
                                 </div>
                                 <div aria-live="polite">
                                     <div id="loading" class="loading hidden">
                                         <div class="loading__stamp" aria-hidden="true"></div>
-                                        <p>Matching against the national registry…</p>
+                                        <p>Running 3-tier matching &amp; SI attribute extraction…</p>
                                     </div>
                                     <div id="output" class="output">
-                                        <p class="output__empty">Submit a record to see its primary match and resemblance score here.</p>
+                                        <p class="output__empty">Submit a record or run the 1-click benchmark to see extraction and resemblance scores.</p>
                                     </div>
                                 </div>
                             </section>
 
                             <section class="panel panel--quiet">
                                 <div class="panel__intro panel__intro--compact">
-                                    <p class="eyebrow">On file</p>
-                                    <h2>Recent codes</h2>
+                                    <p class="eyebrow">Registry Feed</p>
+                                    <h2>Recently Harmonized Codes</h2>
                                 </div>
                                 <div id="recentList" class="recent-list">
-                                    <p class="recent-list__empty">Codes appear here after they are logged.</p>
+                                    <p class="recent-list__empty">Recent CNMC codes will appear here.</p>
                                 </div>
                             </section>
                         </aside>
                     </div>
                 </div>
 
+                <!-- TAB 2: National Material Library -->
                 <div id="tab-registry" class="tab-content">
                     <section class="panel panel--wide" aria-labelledby="registry-heading">
                         <div class="panel__toolbar">
                             <div class="panel__intro">
-                                <h2 id="registry-heading">Standardized material codes</h2>
-                                <p>Unique harmonized materials. Open a row to see original CPSE entries and match scores.</p>
+                                <h2 id="registry-heading">Unified National Material Library</h2>
+                                <p>Harmonized CNMC codes across all CPSEs. Expand any code to inspect technical attributes and mapped source CPSE items.</p>
                             </div>
                             <label class="search-field">
                                 <span class="visually-hidden">Search registry</span>
-                                <input type="search" id="registrySearch" placeholder="Search code, category, or description">
+                                <input type="search" id="registrySearch" placeholder="Search CNMC code, category, or spec">
                             </label>
                             <label class="search-field">
                                 <span class="visually-hidden">Filter category</span>
@@ -223,7 +271,7 @@
                             <label class="search-field">
                                 <span class="visually-hidden">Sort registry</span>
                                 <select id="registrySort" aria-label="Sort registry">
-                                    <option value="latest" selected>Latest added</option>
+                                    <option value="latest" selected>Latest Added</option>
                                     <option value="alphabetical">Alphabetical</option>
                                 </select>
                             </label>
@@ -231,7 +279,7 @@
 
                         <div class="registry">
                             <div class="registry__header">
-                                <span><span class="registry__count" id="registryCount">0</span> unique codes on file</span>
+                                <span><span class="registry__count" id="registryCount">0</span> unique CNMC codes registered</span>
                             </div>
                             <div id="registryGrid" class="registry__grid">
                                 <p class="registry__empty">No materials processed yet.</p>
@@ -240,14 +288,163 @@
                     </section>
                 </div>
 
+                <!-- TAB 3: Governance & Review Queue -->
                 <div id="tab-admin" class="tab-content">
                     <section class="panel panel--wide" aria-labelledby="review-heading">
                         <div class="panel__intro">
-                            <h2 id="review-heading">Registry administration</h2>
-                            <p>Maintain national codes, inspect linked CPSE records, and resolve mid-band matches (70–85% similarity) that need a human decision.</p>
+                            <h2 id="review-heading">Governance &amp; Human-in-the-Loop Review Queue</h2>
+                            <p>3-Band Confidence Governance: High confidence (&ge;85%) is auto-merged, distinct items (&lt;70%) mint new codes, and borderline matches (70–85%) require reviewer approval with reason logging.</p>
                         </div>
                         <div id="reviewQueue"></div>
                     </section>
+                </div>
+
+                <!-- TAB 4: Visual Analytics & Demand Aggregation Dashboard -->
+                <div id="tab-analytics" class="tab-content">
+                    <div class="analytics-kpi-grid">
+                        <div class="kpi-card">
+                            <span class="kpi-label">Master Deduplication Rate</span>
+                            <strong class="kpi-value" id="kpiDedupRate">0.0%</strong>
+                            <span class="kpi-sub" id="kpiDedupSub">Redundancy eliminated across CPSEs</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">Inter-CPSE Shared Materials</span>
+                            <strong class="kpi-value" id="kpiSharedMaterials">0</strong>
+                            <span class="kpi-sub">Common items used across &ge;2 CPSEs</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">Collaborative Sourcing Savings</span>
+                            <strong class="kpi-value" id="kpiSavings">₹ 0 Lakhs</strong>
+                            <span class="kpi-sub">Estimated demand aggregation impact (12.5%)</span>
+                        </div>
+                        <div class="kpi-card">
+                            <span class="kpi-label">Data Completeness Score</span>
+                            <strong class="kpi-value" id="kpiCompleteness">100%</strong>
+                            <span class="kpi-sub">SI-Normalized attribute richness</span>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="panel chart-panel">
+                            <div class="panel__intro panel__intro--compact">
+                                <h3>Duplicate Reduction by CPSE</h3>
+                                <p>Raw Ingested Codes vs Consolidated CNMC Codes</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chartCpseDedup"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="panel chart-panel">
+                            <div class="panel__intro panel__intro--compact">
+                                <h3>Category Distribution</h3>
+                                <p>Harmonized materials across 17 industrial classes</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chartCategoryDist"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="panel chart-panel">
+                            <div class="panel__intro panel__intro--compact">
+                                <h3>Match Confidence Distribution</h3>
+                                <p>3-Band Decision Breakdown</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chartConfidenceDist"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="panel chart-panel">
+                            <div class="panel__intro panel__intro--compact">
+                                <h3>Top Inter-CPSE Shared Materials</h3>
+                                <p>High-leverage items for Joint National Procurement</p>
+                            </div>
+                            <div id="sharedMaterialsTableContainer" class="table-container">
+                                <p class="output__empty">Load records to see cross-CPSE shared material opportunities.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel export-bar-panel">
+                        <div class="export-bar">
+                            <div>
+                                <h4>Download Governance &amp; Analytics Snapshot</h4>
+                                <p>Download comprehensive deduplication metrics, demand aggregation tables, and audit summaries.</p>
+                            </div>
+                            <a href="/analytics/report.csv" download="cnmc-analytics-report.csv" class="btn-primary btn-export">
+                                📥 Export Full Analytics CSV Report
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: SAP / ERP Integration & Audit Trail -->
+                <div id="tab-erp" class="tab-content">
+                    <div class="split">
+                        <section class="panel" aria-labelledby="erp-heading">
+                            <div class="panel__intro">
+                                <h2 id="erp-heading">SAP / ERP Integration Hub</h2>
+                                <p>Seamless bidirectional integration with CPSE ERP systems (SAP S/4HANA, SAP ECC MM, Oracle EBS). Downstream connectors consume standardized MARA/MARC material records with asynchronous job handshakes.</p>
+                            </div>
+
+                            <div class="erp-connector-grid">
+                                <div class="connector-card active">
+                                    <div class="connector-card__header">
+                                        <span class="status-pill status-pill--success">ONLINE</span>
+                                        <h4>SAP S/4HANA &amp; ECC MM</h4>
+                                    </div>
+                                    <p>Maps CNMC records to <strong>MARA</strong> (General Material Data) and <strong>MARC</strong> (Plant Level Data).</p>
+                                    <div class="connector-badges">
+                                        <span>MARA/MARC</span>
+                                        <span>BAPI/IDoc</span>
+                                        <span>OData v4</span>
+                                    </div>
+                                </div>
+
+                                <div class="connector-card">
+                                    <div class="connector-card__header">
+                                        <span class="status-pill status-pill--success">READY</span>
+                                        <h4>Generic Enterprise ERP</h4>
+                                    </div>
+                                    <p>RESTful JSON/CSV export endpoint for custom CPSE in-house ERP platforms.</p>
+                                    <div class="connector-badges">
+                                        <span>REST API v1</span>
+                                        <span>JSON / CSV</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="erp-actions-bar">
+                                <button type="button" id="btnTriggerErpExport" class="btn-primary">
+                                    ⚡ Dispatch SAP MM Export Payload
+                                </button>
+                                <a href="/api/v1/materials/export" target="_blank" class="btn-secondary">
+                                    🌐 View Live ERP API (/api/v1/materials/export)
+                                </a>
+                            </div>
+
+                            <div class="erp-payload-preview">
+                                <div class="payload-header">
+                                    <span>SAP MARA/MARC Canonical JSON Payload Preview</span>
+                                    <span id="erpJobStatusBadge" class="status-pill">IDLE</span>
+                                </div>
+                                <pre id="erpPayloadViewer" class="code-viewer">Click "Dispatch SAP MM Export Payload" to simulate live export handshake...</pre>
+                            </div>
+                        </section>
+
+                        <aside class="rail" aria-labelledby="audit-heading">
+                            <section class="panel panel--wide">
+                                <div class="panel__intro">
+                                    <h2 id="audit-heading">Immutable Governance Audit Log</h2>
+                                    <p>Complete traceability of all creations, auto-merges, human approvals, rejections, and code retirements.</p>
+                                </div>
+                                <div id="auditLogContainer" class="audit-log-container">
+                                    <p class="output__empty">Loading audit records...</p>
+                                </div>
+                            </section>
+                        </aside>
+                    </div>
                 </div>
             </main>
         </div>
