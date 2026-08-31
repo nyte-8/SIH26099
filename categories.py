@@ -1,19 +1,7 @@
 # categories.py
 #
-# The fixed category list (item 1) and per-category critical-attribute
-# schema (item 2) that everything else in the matching pipeline hangs off
-# of. Add a category here and the classifier, extractor, and tiered
-# matcher all pick it up automatically -- no other file needs to change.
-#
-# Each attribute is either:
-#   {"type": "numeric", "unit": "<canonical unit from units.py>", "tolerance": 0.05}
-#     -- values are compared after converting to the canonical unit; a
-#        relative difference under `tolerance` counts as a match.
-#   {"type": "string"}
-#     -- values are compared case-insensitively, with a small allowance
-#        for near-miss spelling (e.g. "Stainless Steel" vs "SS" will NOT
-#        auto-match here -- only typos/casing do; that's intentional,
-#        material name normalization happens at the LLM extraction step).
+# Fixed category registry and attribute schema metadata used by the matching
+# and extraction pipeline.
 
 CATEGORY_SCHEMA = {
     "Pipe": {
@@ -153,8 +141,55 @@ CATEGORY_SCHEMA = {
 
 CATEGORY_LIST = list(CATEGORY_SCHEMA.keys())
 
+AUTO_CATEGORY_SUGGESTIONS = {
+    "Circuits": {
+        "keywords": ["circuit", "pcb", "printed circuit", "integrated circuit"],
+        "attributes": {
+            "circuit_type": {"type": "string"},
+            "voltage_v": {"type": "numeric", "unit": "v", "tolerance": 0.05},
+            "current_a": {"type": "numeric", "unit": "a", "tolerance": 0.10},
+        },
+    },
+}
+
+
+def suggested_category_for(text: str) -> str:
+    """Return a candidate category for a frequent previously unknown family."""
+    lowered = (text or "").lower()
+    for category, definition in AUTO_CATEGORY_SUGGESTIONS.items():
+        if any(keyword in lowered for keyword in definition["keywords"]):
+            return category
+    return ""
+
+
+def suggested_category_definition(category_name: str) -> dict:
+    definition = AUTO_CATEGORY_SUGGESTIONS.get(category_name, {})
+    return definition.get("attributes", {})
+
+
+def register_category(category_name: str, attributes: dict = None) -> dict:
+    """Register a new material category at runtime."""
+    if not category_name or not str(category_name).strip():
+        raise ValueError("Category name is required")
+
+    normalized_name = str(category_name).strip()
+    if normalized_name in CATEGORY_SCHEMA:
+        return {
+            "name": normalized_name,
+            "attributes": CATEGORY_SCHEMA[normalized_name].get("attributes", {}),
+            "created": False,
+        }
+
+    CATEGORY_SCHEMA[normalized_name] = {"attributes": attributes or {}}
+    global CATEGORY_LIST
+    CATEGORY_LIST = list(CATEGORY_SCHEMA.keys())
+    return {
+        "name": normalized_name,
+        "attributes": CATEGORY_SCHEMA[normalized_name].get("attributes", {}),
+        "created": True,
+    }
+
 
 def attribute_schema_for(category: str) -> dict:
-    """Critical-attribute schema for a category, or {} if the category
-    is unrecognized (treated like Uncategorized -- no attribute gating)."""
+    """Return the schema for a category, or {} if unknown."""
     return CATEGORY_SCHEMA.get(category, {}).get("attributes", {})

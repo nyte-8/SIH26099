@@ -1,6 +1,0 @@
-CPSE_ID,Material_Code,Description,Specification,Unit_of_Measure,Material_Type,Procurement_Date
-CPSE_A,MAT-1001,Steel Pipe Description for CPSE A,50mm nominal pipe,mm,Pipe,2024-01-15
-CPSE_B,MAT-2005,Stainless Steel Pipe 2 inch,Stainless Steel,inch,Pipe,2024-03-20
-CPSE_C,MAT-3010,Pipe SS 50MM Dia,Stainless Steel,mm,Pipe,2024-05-10
-CPSE_A,MAT-1001,Steel Pipe Description for CPSE A,50mm nominal pipe,mm,Pipe,2024-01-15
-CPSE_D,MAT-4000,Heavy Steel Plate Material,High Carbon Steel,ton,Plate,2023-11-01

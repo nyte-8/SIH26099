@@ -56,3 +56,26 @@ def parse_quantity(text: str):
     value = float(match.group(1))
     unit = match.group(2).lower()
     return value, unit
+
+
+def unit_is_recognized(from_unit: str, canonical_unit: str) -> bool:
+    """True if `from_unit` is an explicit, known spelling for `canonical_unit`
+    (e.g. 'cm' or 'inch' for canonical 'mm'). False for an empty/unknown unit
+    -- used to tell a confident unit match apart from a bare, unitless number
+    that just happens to be sitting in the text."""
+    table = _UNIT_TABLES.get(canonical_unit)
+    if not table:
+        return False
+    key = (from_unit or "").strip().lower()
+    return bool(key) and key in table
+
+
+def parse_quantities(text: str):
+    """Return every number/unit pair in a description in source order."""
+    import re
+    if not text:
+        return []
+    return [
+        (float(value), unit.lower())
+        for value, unit in re.findall(r'(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)', text)
+    ]

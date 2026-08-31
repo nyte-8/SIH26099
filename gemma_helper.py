@@ -21,6 +21,7 @@ import os
 import re
 import json
 import hashlib
+import time
 from typing import List, Dict, Optional
 from difflib import SequenceMatcher
 
@@ -32,9 +33,12 @@ except ImportError:
 LM_STUDIO_HOST = os.environ.get("LM_STUDIO_HOST", "http://localhost:1234")
 LM_STUDIO_MODEL = os.environ.get("LM_STUDIO_MODEL", "local-model")
 REQUEST_TIMEOUT = 30
+LLM_CACHE_TTL = 900
+_response_cache = {}
 
-from categories import CATEGORY_LIST, attribute_schema_for
-from units import parse_quantity, normalize as normalize_unit
+import categories
+from categories import attribute_schema_for
+from units import parse_quantities, normalize as normalize_unit, unit_is_recognized
 
 # Keyword table used by the offline fallback (and as a sanity check on the
 # LLM's answer) to guess a category from the fixed CATEGORY_LIST.
@@ -61,6 +65,9 @@ CATEGORY_KEYWORDS = {
 
 def _guess_category(text: str) -> str:
     lowered = text.lower()
+    for category, definition in categories.AUTO_CATEGORY_SUGGESTIONS.items():
+        if any(keyword in lowered for keyword in definition["keywords"]):
+            return category if category in categories.CATEGORY_LIST else "Uncategorized"
     for category, keywords in CATEGORY_KEYWORDS.items():
         if any(keyword in lowered for keyword in keywords):
             return category
@@ -118,7 +125,7 @@ def classify_category(descriptions: List[str]) -> str:
     if not combined:
         return "Uncategorized"
 
-    category_list_str = ", ".join(CATEGORY_LIST)
+    category_list_str = ", ".join(categories.CATEGORY_LIST)
     prompt = f"""Classify this material into EXACTLY ONE of the following categories (respond with the category name only, exactly as written, nothing else):
 {category_list_str}
 
@@ -127,12 +134,12 @@ Material: {combined}"""
     raw_response = ask_gemma(prompt)
     if raw_response:
         answer = raw_response.strip().strip('."\'')
-        for category in CATEGORY_LIST:
+        for category in categories.CATEGORY_LIST:
             if answer.lower() == category.lower():
                 return category
         # Model answered with something close but not exact -- try a
         # substring match before giving up on it.
-        for category in CATEGORY_LIST:
+        for category in categories.CATEGORY_LIST:
             if category.lower() in answer.lower():
                 return category
         print(f"[gemma_helper] Category '{answer}' not in fixed list; using keyword fallback.")
@@ -140,7 +147,7 @@ Material: {combined}"""
     return _guess_category(combined)
 
 
-def extract_attributes(category: str, descriptions: List[str]) -> Dict:
+def extract_attributes(category: str, descriptions: List[str], include_metadata: bool = False) -> Dict:
     """Item 3: pulls only the critical attributes defined for `category`
     (see categories.py) out of the descriptions, as structured data with
     numeric fields normalized to SI units (item 4). Missing attributes are
@@ -148,7 +155,15 @@ def extract_attributes(category: str, descriptions: List[str]) -> Dict:
     a confirmed match or mismatch in the tiered logic downstream."""
     schema = attribute_schema_for(category)
     if not schema:
-        return {}
+        empty_result = {}
+        metadata = {
+            "source": "not_applicable",
+            "model": None,
+            "prompt_version": "attributes-v2",
+            "field_confidence": {},
+            "warnings": ["No attribute schema is defined for this category"],
+        }
+        return (empty_result, metadata) if include_metadata else empty_result
 
     combined = " ".join(d for d in descriptions if d).strip()
     attr_names = list(schema.keys())
@@ -156,6 +171,8 @@ def extract_attributes(category: str, descriptions: List[str]) -> Dict:
     prompt = f"""Extract these attributes from the material description below. Respond with ONLY a valid JSON object, no other text, using exactly these keys: {", ".join(attr_names)}.
 For any numeric attribute, output just the number converted to these units: {", ".join(f"{k} in {v['unit']}" for k, v in schema.items() if v.get('type') == 'numeric')}.
 Use null for any attribute not mentioned in the description. Do not guess.
+For the string field `material`, use values like `Stainless Steel`, `Carbon Steel`, `Bronze` when that material is explicitly named.
+When a material is explicitly named, normalize it to its standard material family. Do not invent a material when it is absent.
 
 Material description: {combined}"""
 
@@ -168,27 +185,202 @@ Material description: {combined}"""
                 cleaned = cleaned[4:] if cleaned.lower().startswith("json") else cleaned
             parsed = json.loads(cleaned)
             if isinstance(parsed, dict):
-                return {name: parsed.get(name) for name in attr_names}
+                normalized = {str(k).strip().lower(): v for k, v in parsed.items()}
+                if not all(name.lower() in normalized for name in attr_names):
+                    raise ValueError("Required extraction fields are missing")
+                result = {}
+                for name in attr_names:
+                    value = parsed.get(name)
+                    if value is None:
+                        alias_candidates = [
+                            name,
+                            name.lower(),
+                            name.upper(),
+                            name.title(),
+                            name.replace('_', ' '),
+                            name.replace('_', ' ').title(),
+                        ]
+                        if 'material' in name.lower():
+                            alias_candidates.extend(['material', 'Material', 'material_type', 'Material Type'])
+                        for candidate in alias_candidates:
+                            if candidate in normalized:
+                                value = normalized[candidate]
+                                break
+                    if meta := schema.get(name):
+                        if meta.get("type") == "numeric" and value is not None:
+                            value = float(value)
+                    result[name] = value
+                if any(
+                    schema[name].get("type") == "numeric" and value is not None and not isinstance(value, (int, float))
+                    for name, value in result.items()
+                ):
+                    raise ValueError("Numeric attribute validation failed")
+                metadata = {
+                    "source": "llm",
+                    "model": LM_STUDIO_MODEL,
+                    "prompt_version": "attributes-v2",
+                    "field_confidence": {name: 0.95 if value not in (None, "") else 0.0 for name, value in result.items()},
+                    "warnings": [],
+                }
+                return (result, metadata) if include_metadata else result
         except Exception as e:
             print(f"[gemma_helper] Could not parse attribute JSON ({e}); using offline fallback.")
 
-    return _extract_attributes_offline(schema, combined)
+    result = _extract_attributes_offline(schema, combined)
+    metadata = {
+        "source": "offline_fallback",
+        "model": None,
+        "prompt_version": "attributes-v2",
+        "field_confidence": {name: 0.45 if value not in (None, "") else 0.0 for name, value in result.items()},
+        "warnings": ["LM Studio unavailable or returned invalid JSON"],
+    }
+    return (result, metadata) if include_metadata else result
+
+
+_UNIT_SUFFIXES_BY_LENGTH = sorted(
+    ["_mm", "_kv", "_kw", "_bar", "_pct", "_rpm", "_m3h", "_sqmm", "_v", "_a", "_m", "_count"],
+    key=len, reverse=True,
+)
+
+
+def _keyword_for_field(name: str) -> str:
+    """Best-guess plain-English keyword for a schema field name, e.g.
+    'outer_diameter_mm' -> 'outer diameter', 'power_kw' -> 'power'. Used to
+    find the number actually next to that word in the text, rather than
+    just the nearest same-unit number, when a description mentions several
+    values that share a unit (diameter/length/width all in mm, say)."""
+    for suffix in _UNIT_SUFFIXES_BY_LENGTH:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name.replace("_", " ").strip()
+
+
+def _find_near_keyword(text_lower: str, keyword: str):
+    """Looks for a number sitting right next to `keyword`, in either order,
+    within a short window -- e.g. 'nominal diameter 50mm' (keyword first)
+    or '10mm thickness' (number first). Returns (value, unit) for whichever
+    pattern is found earliest in the text, or None if neither matches."""
+    if not keyword:
+        return None
+    import re
+    kw = re.escape(keyword)
+    # [^0-9,] (not just [^0-9]) so the window can't cross a comma -- commas
+    # separate distinct spec clauses in this data (e.g. "..., bore 25mm, OD
+    # 52mm, ..."), and without this a keyword can wrongly grab a number that
+    # actually belongs to the previous clause (e.g. "OD 52mm, width" would
+    # otherwise let 52 satisfy a search for "width").
+    forward = re.search(kw + r'[^0-9,]{0,15}(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)', text_lower)
+    backward = re.search(r'(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)[^0-9,]{0,15}' + kw, text_lower)
+    candidates = [m for m in (forward, backward) if m]
+    if not candidates:
+        return None
+    match = min(candidates, key=lambda m: m.start())
+    return float(match.group(1)), match.group(2).lower()
 
 
 def _extract_attributes_offline(schema: Dict, combined_text: str) -> Dict:
-    """Best-effort attribute extraction with no LLM available: numeric
-    attributes get the first number+unit found in the text (weak but
-    functional for single-dimension descriptions); string attributes are
-    left null rather than guessed, since a wrong guess is worse than an
-    unknown value in the tiered matcher."""
-    result = {}
-    parsed = parse_quantity(combined_text)
-    for name, meta in schema.items():
-        if meta.get("type") == "numeric" and parsed:
-            value, unit = parsed
-            result[name] = normalize_unit(value, unit, meta["unit"])
-        else:
-            result[name] = None
+    """Best-effort attribute extraction with no LLM available.
+
+    Numeric attributes are filled in three passes so a value doesn't get
+    assigned to the wrong field just because it appears first in the text,
+    or because another field happens to share its unit:
+      Pass 1 (keyword-adjacent): for each numeric attribute, look for its
+        own name (e.g. "diameter" for diameter_mm, "length" for length_mm)
+        sitting right next to a number in the text. This is what
+        disambiguates "nominal diameter 50mm, ... length 6000mm" correctly
+        even though both numbers are in mm -- a plain unit match alone
+        can't tell them apart.
+      Pass 2 (confident unit match): for whatever pass 1 didn't resolve,
+        take the next not-yet-used parsed number whose unit is an
+        explicit, recognized spelling of that attribute's canonical unit.
+      Pass 3 (positional fallback): anything still empty (usually because
+        the text used a bare/unitless number, e.g. "PN16") takes the next
+        unused parsed value in order.
+    A field with nothing left to draw from stays None -- intentional; an
+    unknown value must never masquerade as a guess here.
+
+    Material string values are recognized from common material names so
+    the field does not stay stuck as null when the model is unreachable.
+    """
+    result = {name: None for name in schema}
+    combined_lower_for_keywords = (combined_text or "").lower()
+    parsed_values = parse_quantities(combined_text)
+    used = [False] * len(parsed_values)
+    numeric_fields = [name for name, meta in schema.items() if meta.get("type") == "numeric"]
+
+    def _claim_matching_parsed(value, unit):
+        """Marks the first unused parsed entry equal to (value, unit) as
+        used, so passes 2/3 don't also hand it out to another field."""
+        for i, (pv, pu) in enumerate(parsed_values):
+            if not used[i] and pv == value and pu == unit:
+                used[i] = True
+                return
+
+    # Pass 1: keyword-adjacent matches -- the field's own name next to a number.
+    # Skipped when the derived keyword IS the canonical unit itself (e.g. a
+    # field literally named "rpm"): in that case the "keyword" would just
+    # match the unit letters attached to some unrelated number elsewhere in
+    # the text, and the direct unit-suffix match in pass 2 is more reliable.
+    for name in numeric_fields:
+        keyword = _keyword_for_field(name)
+        if keyword == schema[name]["unit"].lower():
+            continue
+        found = _find_near_keyword(combined_lower_for_keywords, keyword) if keyword else None
+        if found:
+            value, unit = found
+            result[name] = normalize_unit(value, unit, schema[name]["unit"])
+            _claim_matching_parsed(value, unit)
+
+    # Pass 2: confident, unit-verified matches for whatever's still empty.
+    for name in numeric_fields:
+        if result[name] is not None:
+            continue
+        canonical_unit = schema[name]["unit"]
+        for i, (value, unit) in enumerate(parsed_values):
+            if used[i]:
+                continue
+            if unit_is_recognized(unit, canonical_unit):
+                result[name] = normalize_unit(value, unit, canonical_unit)
+                used[i] = True
+                break
+
+    # Pass 3: positional fallback using whatever numbers are still unclaimed.
+    # Prefer a bare/unitless leftover (e.g. the "16" in "PN16") over one that
+    # already carries an explicit, different unit (e.g. a stray "50mm") --
+    # a number tagged with someone else's unit is a worse guess than one
+    # with no unit at all for a field expecting yet another unit.
+    for name in numeric_fields:
+        if result[name] is not None:
+            continue
+        unused = [i for i, used_flag in enumerate(used) if not used_flag]
+        unused.sort(key=lambda i: 0 if parsed_values[i][1] == "" else 1)
+        if unused:
+            i = unused[0]
+            value, unit = parsed_values[i]
+            result[name] = normalize_unit(value, unit, schema[name]["unit"])
+            used[i] = True
+
+    combined_lower = combined_lower_for_keywords
+    material_aliases = {
+        "stainless steel": "Stainless Steel",
+        "ss": "Stainless Steel",
+        "carbon steel": "Carbon Steel",
+        "mild steel": "Mild Steel",
+        "bronze": "Bronze",
+        "copper": "Copper",
+        "cast iron": "Cast Iron",
+        "galvanized steel": "Galvanized Steel",
+        "aluminium": "Aluminium",
+        "aluminum": "Aluminum",
+    }
+    if "material" in schema:
+        import re as _re
+        for phrase, canonical in material_aliases.items():
+            if _re.search(r'\b' + _re.escape(phrase) + r'\b', combined_lower):
+                result["material"] = canonical
+                break
+
     return result
 
 
@@ -199,19 +391,32 @@ def ask_gemma(prompt: str) -> Optional[str]:
     error so the caller can fall back to the offline heuristic."""
     if requests is None:
         return None
+    cache_key = hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+    cached = _response_cache.get(cache_key)
+    if cached and time.time() - cached[0] < LLM_CACHE_TTL:
+        return cached[1]
     try:
-        response = requests.post(
-            f"{LM_STUDIO_HOST}/v1/chat/completions",
-            json={
-                "model": LM_STUDIO_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
+        response = None
+        for attempt in range(2):
+            try:
+                response = requests.post(
+                    f"{LM_STUDIO_HOST}/v1/chat/completions",
+                    json={
+                        "model": LM_STUDIO_MODEL,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.2,
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                break
+            except requests.RequestException:
+                if attempt == 1:
+                    raise
         response.raise_for_status()
         data = response.json()
-        return (data["choices"][0]["message"]["content"] or "").strip()
+        result = (data["choices"][0]["message"]["content"] or "").strip()
+        _response_cache[cache_key] = (time.time(), result)
+        return result
     except Exception as e:
         print(f"[gemma_helper] LM Studio call failed ({e}); using offline fallback.")
         return None

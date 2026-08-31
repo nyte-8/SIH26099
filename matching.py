@@ -2,7 +2,7 @@
 
 import pandas as pd
 from gemma_helper import generate_standard_info, classify_category, extract_attributes
-from database import save_material_data
+from database import observe_category_candidate, save_material_data
 import os
 from typing import List, Dict
 
@@ -27,7 +27,9 @@ def _row_get(row, key):
 
 def process_single_material(cpse_id: str, material_code: str, description: str, specification: str,
                              unit_of_measure: str = None, material_type: str = None,
-                             procurement_date: str = None) -> Dict:
+                             procurement_date: str = None, source_system_id: str = "manual",
+                             import_batch_id: str = None, source_record_id: str = None,
+                             existing_record_id: int = None, changed_by: str = "system") -> Dict:
     """Runs one material record through the full pipeline. Used by both the
     CSV batch run and the /process web endpoint, so the web UI and the
     batch script always behave identically. Order matters here (this is
@@ -42,7 +44,11 @@ def process_single_material(cpse_id: str, material_code: str, description: str, 
     descriptions = [description, specification]
 
     category = classify_category(descriptions)
-    attrs = extract_attributes(category, descriptions)
+    if category == "Uncategorized":
+        promoted = observe_category_candidate(" ".join(descriptions))
+        if promoted:
+            category = promoted
+    attrs, extraction_metadata = extract_attributes(category, descriptions, include_metadata=True)
 
     standard_info = generate_standard_info(descriptions)
     standard_desc = standard_info.get("standard_description", description)
@@ -59,6 +65,11 @@ def process_single_material(cpse_id: str, material_code: str, description: str, 
         unit_of_measure=unit_of_measure,
         material_type=material_type,
         procurement_date=procurement_date,
+        source_system_id=source_system_id,
+        import_batch_id=import_batch_id,
+        source_record_id=source_record_id,
+        existing_record_id=existing_record_id,
+        changed_by=changed_by,
     )
 
     return {
@@ -70,6 +81,8 @@ def process_single_material(cpse_id: str, material_code: str, description: str, 
         "attributes": attrs,
         "status": saved["status"],
         "tolerance_score": saved["tolerance_score"],
+        "candidates": saved.get("candidates", []),
+        "extraction_metadata": extraction_metadata,
     }
 
 
