@@ -581,8 +581,12 @@ def find_matching_candidates(candidate_description: str, category: str = None,
         text_score = max(semantic_score, sorted_score)
         matched = sum(flag == "match" for flag in flags.values())
         known = sum(flag != "unknown" for flag in flags.values())
-        attribute_score = matched / known if known else 0.0
-        score = (text_score * 0.65) + (attribute_score * 0.35 if known else 0.0)
+        if known > 0:
+            attribute_score = matched / known
+            score = (text_score * 0.60) + (attribute_score * 0.40)
+        else:
+            attribute_score = 0.0
+            score = text_score
         reasons = []
         if category:
             reasons.append("Same category")

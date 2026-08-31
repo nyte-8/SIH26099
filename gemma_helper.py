@@ -90,14 +90,29 @@ def _best_known_match(combined: str, known_materials: Optional[List[Dict]]) -> O
     return best if best_score >= 0.72 else None
 
 
+def _combine_descriptions(descriptions: List[str]) -> str:
+    """Combines raw description and specification without losing key phrases."""
+    valid = [re.sub(r"\s+", " ", str(d).strip()) for d in descriptions if d and str(d).strip()]
+    if not valid:
+        return ""
+    if len(valid) == 1:
+        return valid[0]
+    
+    # If one string is entirely contained in the other, use the more detailed one
+    if valid[0].lower() in valid[1].lower():
+        return valid[1]
+    if valid[1].lower() in valid[0].lower():
+        return valid[0]
+    
+    # Otherwise combine clauses smoothly: "Hex bolt, M12, grade 8.8, size-12mm"
+    return ", ".join(valid)
+
+
 def _simulated_response(descriptions: List[str], known_materials: Optional[List[Dict]] = None) -> Dict:
-    """Offline fallback used when LM Studio isn't reachable. Same input
-    always produces the same code; different inputs produce different
-    codes (the old version always returned one hardcoded result). Checks
-    the existing registry first so obvious repeats reuse a code instead
-    of minting a new one."""
+    """Offline fallback used when LM Studio isn't reachable. Combines full
+    description and specification context to prevent artificial score drops."""
     valid = [d for d in descriptions if d]
-    combined = re.sub(r"\s+", " ", " ".join(valid)).strip()
+    combined = _combine_descriptions(valid)
 
     match = _best_known_match(combined, known_materials)
     if match:
@@ -107,11 +122,10 @@ def _simulated_response(descriptions: List[str], known_materials: Optional[List[
             "category": match["category"],
         }
 
-    base = max(valid, key=len, default=combined)
     digest = hashlib.sha1(combined.lower().encode()).hexdigest()
     code_num = int(digest, 16) % 9999
     return {
-        "standard_description": base.strip(),
+        "standard_description": combined.strip(),
         "common_code": f"CNMC-{code_num:04d}",
         "category": _guess_category(combined),
     }
@@ -364,22 +378,78 @@ def _extract_attributes_offline(schema: Dict, combined_text: str) -> Dict:
     combined_lower = combined_lower_for_keywords
     material_aliases = {
         "stainless steel": "Stainless Steel",
+        "ss316": "Stainless Steel",
+        "ss304": "Stainless Steel",
         "ss": "Stainless Steel",
         "carbon steel": "Carbon Steel",
+        "cs": "Carbon Steel",
         "mild steel": "Mild Steel",
+        "ms": "Mild Steel",
         "bronze": "Bronze",
+        "brass": "Brass",
         "copper": "Copper",
+        "cu": "Copper",
         "cast iron": "Cast Iron",
+        "ci": "Cast Iron",
         "galvanized steel": "Galvanized Steel",
         "aluminium": "Aluminium",
         "aluminum": "Aluminum",
+        "alloy steel": "Alloy Steel",
+        "pvc": "PVC",
+        "ptfe": "PTFE",
+        "xlpe": "XLPE",
     }
-    if "material" in schema:
-        import re as _re
+    import re as _re
+    if "material" in schema and result.get("material") is None:
         for phrase, canonical in material_aliases.items():
             if _re.search(r'\b' + _re.escape(phrase) + r'\b', combined_lower):
                 result["material"] = canonical
                 break
+
+    if "conductor_material" in schema and result.get("conductor_material") is None:
+        if _re.search(r'\b(copper|cu)\b', combined_lower):
+            result["conductor_material"] = "Copper"
+        elif _re.search(r'\b(aluminum|aluminium|al)\b', combined_lower):
+            result["conductor_material"] = "Aluminum"
+
+    # Fastener type & Grade
+    if "fastener_type" in schema and result.get("fastener_type") is None:
+        m_ft = _re.search(r'\b(hex bolt|stud bolt|anchor bolt|u-bolt|socket head|cap screw|bolt|nut|washer|screw|rivet)\b', combined_lower)
+        if m_ft:
+            result["fastener_type"] = m_ft.group(1).title()
+
+    if "grade" in schema and result.get("grade") is None:
+        m_gr = _re.search(r'\b(?:grade|gr|class)\s*([0-9]+(?:\.[0-9]+)?|[A-Za-z0-9-]+)\b', combined_lower)
+        if m_gr:
+            result["grade"] = m_gr.group(1).upper()
+
+    # Valve & Pump types
+    if "valve_type" in schema and result.get("valve_type") is None:
+        m_vt = _re.search(r'\b(ball valve|gate valve|globe valve|check valve|butterfly valve|needle valve|plug valve|control valve)\b', combined_lower)
+        if m_vt:
+            result["valve_type"] = m_vt.group(1).title()
+
+    if "pump_type" in schema and result.get("pump_type") is None:
+        m_pt = _re.search(r'\b(centrifugal|submersible|gear pump|positive displacement|reciprocating)\b', combined_lower)
+        if m_pt:
+            result["pump_type"] = m_pt.group(1).title()
+
+    # Seal & Fitting types
+    if "seal_type" in schema and result.get("seal_type") is None:
+        m_st = _re.search(r'\b(spiral wound|o-ring|oring|gasket|mechanical seal|lip seal)\b', combined_lower)
+        if m_st:
+            result["seal_type"] = m_st.group(1).title()
+
+    if "fitting_type" in schema and result.get("fitting_type") is None:
+        m_fit = _re.search(r'\b(elbow|tee|reducer|flange|coupling|nipple|union|cap)\b', combined_lower)
+        if m_fit:
+            result["fitting_type"] = m_fit.group(1).title()
+
+    # Pipe Schedule
+    if "schedule" in schema and result.get("schedule") is None:
+        m_sch = _re.search(r'\bsch(?:edule)?\s*([0-9]+[A-Za-z]*|std|xs|xxs)\b', combined_lower)
+        if m_sch:
+            result["schedule"] = m_sch.group(1).upper()
 
     return result
 
