@@ -701,35 +701,119 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!items || items.length === 0) {
                 reviewQueue.innerHTML = `
-                    <div class="stat-card" style="padding:20px; text-align:center;">
+                    <div class="stat-card" style="padding:24px; text-align:center;">
                         <span class="status-pill status-pill--success" style="margin-bottom:8px;">ALL CLEAR</span>
                         <h3>No Pending Exception Items</h3>
-                        <p style="color:var(--ink-soft); margin-top:4px;">All submitted material records have been categorized and confirmed with high confidence.</p>
+                        <p style="color:var(--ink-soft); margin-top:6px;">All submitted material records have been categorized and confirmed with high confidence (>= 85%) or minted as distinct codes.</p>
                     </div>
                 `;
                 return;
             }
 
-            reviewQueue.innerHTML = items.map(item => `
-                <div class="stat-card" style="margin-bottom:14px; padding:18px; border-left: 4px solid var(--amber);">
-                    <div class="stat-card__top">
-                        <span class="stat-card__title">CPSE: ${escapeHtml(item.cpse_id)} &bull; Code: ${escapeHtml(item.material_code)}</span>
-                        <span class="status-pill status-pill--warning">${Math.round((item.tolerance_score || 0.75) * 100)}% Resemblance</span>
+            reviewQueue.innerHTML = items.map(item => {
+                const score = Math.round((item.tolerance_score || 0.75) * 100);
+                
+                // Master attributes tags
+                let masterAttrsHtml = '';
+                if (item.attributes && typeof item.attributes === 'object') {
+                    const entries = Object.entries(item.attributes).filter(([k, v]) => v !== null && v !== '');
+                    if (entries.length > 0) {
+                        masterAttrsHtml = entries.map(([k, v]) => `<span class="attr-pill"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</span>`).join('');
+                    } else {
+                        masterAttrsHtml = '<span class="attr-pill" style="color:var(--ink-faint);">General specification</span>';
+                    }
+                }
+
+                // Attribute diff tags (Flags)
+                let diffTagsHtml = '';
+                if (item.attribute_flags && typeof item.attribute_flags === 'object' && Object.keys(item.attribute_flags).length > 0) {
+                    diffTagsHtml = Object.entries(item.attribute_flags).map(([attr, flag]) => {
+                        let tagClass = 'attr-tag--unknown';
+                        let icon = '⚪';
+                        if (flag === 'matched' || flag === 'match') {
+                            tagClass = 'attr-tag--matched';
+                            icon = '✓';
+                        } else if (flag === 'conflict') {
+                            tagClass = 'attr-tag--conflict';
+                            icon = '✕';
+                        }
+                        return `<span class="attr-tag ${tagClass}">${icon} <strong>${escapeHtml(attr)}</strong>: ${escapeHtml(flag)}</span>`;
+                    }).join('');
+                } else {
+                    diffTagsHtml = `<span class="attr-tag attr-tag--matched">✓ High Text Similarity (${score}%)</span>`;
+                }
+
+                return `
+                <div class="review-card">
+                    <div class="review-card__header">
+                        <div class="review-card__title">
+                            <span>Record #${item.id}</span>
+                            <span class="status-pill status-pill--warning">${score}% Similarity</span>
+                            <span class="eyebrow" style="margin-left:4px;">${escapeHtml(item.category || 'Standard Category')}</span>
+                        </div>
+                        <div class="review-card__meta">
+                            <span style="font-size:12px; color:var(--ink-soft);">Mid-Band Confidence (70–85%) &bull; Decision Required</span>
+                        </div>
                     </div>
-                    <div style="margin: 10px 0;">
-                        <p style="font-size:13.5px;"><strong>Raw Spec:</strong> ${escapeHtml(item.description)} ${item.specification ? '&bull; ' + escapeHtml(item.specification) : ''}</p>
-                        <p style="font-size:13.5px; color: var(--ink-soft); margin-top:4px;"><strong>Target CNMC:</strong> ${escapeHtml(item.common_code)}</p>
+
+                    <div class="review-compare-grid">
+                        <!-- Left Column: Source CPSE Record -->
+                        <div class="review-col review-col--source">
+                            <div class="review-col__heading">
+                                <span>🏢 Incoming CPSE Record</span>
+                                <span class="cpse-pill">${escapeHtml(item.cpse_id || 'CPSE')}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                                <span class="review-col__code">${escapeHtml(item.material_code || 'N/A')}</span>
+                                <span style="font-size:11px; color:var(--ink-faint);">Source Code</span>
+                            </div>
+                            <p class="review-col__desc"><strong>Description:</strong> ${escapeHtml(item.description || '')}</p>
+                            ${item.specification ? `<div class="review-col__spec"><strong>Specification:</strong> ${escapeHtml(item.specification)}</div>` : ''}
+                        </div>
+
+                        <!-- Right Column: Universal CNMC Target -->
+                        <div class="review-col review-col--master">
+                            <div class="review-col__heading">
+                                <span>🇮🇳 Proposed Universal National Code</span>
+                                <span class="status-pill status-pill--success">CNMC MASTER</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                                <span class="review-col__code" style="color:var(--green-ink);">${escapeHtml(item.common_code)}</span>
+                                <span style="font-size:11px; color:var(--green-ink); font-weight:700;">${escapeHtml(item.category || '')}</span>
+                            </div>
+                            <p class="review-col__desc"><strong>Standard Description:</strong> ${escapeHtml(item.standard_description || '')}</p>
+                            <div style="margin-top:6px;">
+                                <span style="font-size:11.5px; font-weight:700; color:var(--ink-faint); text-transform:uppercase;">Master Technical Attributes:</span>
+                                <div class="review-col__attrs">${masterAttrsHtml}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="display:flex; gap:10px; margin-top:12px;">
-                        <button type="button" class="btn-primary" onclick="approveMerge('${escapeHtml(item.common_code)}')">
-                            ✓ Approve Consolidation to ${escapeHtml(item.common_code)}
-                        </button>
-                        <button type="button" class="btn-secondary" onclick="rejectMerge(${item.id})">
-                            ✕ Reject & Mint Distinct Code
-                        </button>
+
+                    <!-- Attribute Comparison Diff Bar -->
+                    <div class="review-diff-bar">
+                        <span class="review-diff-bar__title">Technical Attribute &amp; Resemblance Analysis:</span>
+                        <div class="review-diff-tags">
+                            ${diffTagsHtml}
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="review-card__actions">
+                        <div style="font-size:12.5px; color:var(--ink-soft);">
+                            Merging will link <strong>[${escapeHtml(item.cpse_id)}] ${escapeHtml(item.material_code)}</strong> to <strong>${escapeHtml(item.common_code)}</strong>.
+                        </div>
+                        <div class="review-card__btns">
+                            <button type="button" class="btn-primary" onclick="approveMerge('${escapeHtml(item.common_code)}')">
+                                ✓ Approve Consolidation to ${escapeHtml(item.common_code)}
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="rejectMerge(${item.id})">
+                                ✕ Reject &amp; Mint Distinct Code
+                            </button>
+                        </div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         } catch (error) {
             console.error('Error loading pending review:', error);
             reviewQueue.innerHTML = '<p class="output__empty">Failed to load review items.</p>';
