@@ -393,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (m.attributes && typeof m.attributes === 'object') {
                 const entries = Object.entries(m.attributes).filter(([k, v]) => v !== null && v !== '');
                 if (entries.length > 0) {
-                    attrsSnippet = `<div class="registry-card__attrs">${entries.slice(0, 3).map(([k, v]) => `<span>${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`).join('')}</div>`;
+                    attrsSnippet = `<div class="registry-card__attrs">${entries.slice(0, 4).map(([k, v]) => `<span>${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`).join('')}</div>`;
                 }
             }
 
@@ -401,22 +401,92 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="registry-card" data-code="${escapeHtml(m.common_code)}">
                     <div class="registry-card__top">
                         <span class="eyebrow">${escapeHtml(m.category || 'Uncategorized')}</span>
-                        <span class="status-pill">${linkedCount} CPSE Records</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="status-pill">${linkedCount} CPSE Records</span>
+                            <span class="registry-card__chevron">▼ Details</span>
+                        </div>
                     </div>
                     <strong class="registry-card__code">${escapeHtml(m.common_code)}</strong>
                     <p class="registry-card__desc">${escapeHtml(m.standard_description)}</p>
                     ${attrsSnippet}
+
+                    <!-- Expandable Dropdown Drawer for Attached CPSE Records -->
+                    <div class="registry-card__drawer" id="drawer-${escapeHtml(m.common_code)}">
+                        <div class="drawer-header">
+                            <span>📦 Attached CPSE Source Records (${linkedCount})</span>
+                            <span style="font-size:10px; color:var(--ink-faint);">Click card to collapse</span>
+                        </div>
+                        <div class="attached-records-list">
+                            <p class="output__empty" style="padding:10px;">Loading attached records...</p>
+                        </div>
+                    </div>
                 </div>
             `;
         }).join('');
 
-        // Attach click to inspect
+        // Attach click to toggle expandable dropdown
         registryGrid.querySelectorAll('.registry-card').forEach(card => {
-            card.addEventListener('click', function () {
+            card.addEventListener('click', async function (e) {
+                // If clicking inside drawer text, allow selection without toggling
+                if (e.target.closest('.registry-card__drawer') && !e.target.closest('.drawer-header')) {
+                    return;
+                }
+
                 const code = this.getAttribute('data-code');
-                if (code) loadRecordsForCode(code);
+                const isOpen = this.classList.contains('registry-card--open');
+
+                if (isOpen) {
+                    this.classList.remove('registry-card--open');
+                } else {
+                    this.classList.add('registry-card--open');
+                    await loadDrawerRecords(this, code);
+                }
             });
         });
+    }
+
+    async function loadDrawerRecords(cardElement, commonCode) {
+        const drawerList = cardElement.querySelector('.attached-records-list');
+        if (!drawerList) return;
+
+        try {
+            const response = await fetch(`/admin-records/${encodeURIComponent(commonCode)}`);
+            const records = await response.json();
+
+            if (!records || records.length === 0) {
+                drawerList.innerHTML = '<p class="output__empty" style="padding:8px;">No source CPSE records linked to this code.</p>';
+                return;
+            }
+
+            drawerList.innerHTML = records.map(r => {
+                const scoreDisplay = r.tolerance_score !== null && r.tolerance_score !== undefined
+                    ? `${Math.round(r.tolerance_score * 100)}% Match`
+                    : 'Origin Master';
+
+                return `
+                    <div class="attached-record-item">
+                        <div class="attached-record-item__top">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span class="cpse-pill">${escapeHtml(r.cpse_id || 'CPSE')}</span>
+                                <span class="attached-record-item__code">${escapeHtml(r.material_code || 'N/A')}</span>
+                            </div>
+                            <span class="status-pill status-pill--success">${escapeHtml(scoreDisplay)}</span>
+                        </div>
+                        <div class="attached-record-item__desc">
+                            <strong>Description:</strong> ${escapeHtml(r.description || '')}
+                        </div>
+                        ${r.specification ? `<div class="attached-record-item__spec"><strong>Specification:</strong> ${escapeHtml(r.specification)}</div>` : ''}
+                        <div class="attached-record-item__meta">
+                            <span>Source System: ${escapeHtml(r.source_system_id || 'ERP')}</span>
+                            <span>Procured: ${escapeHtml(r.procurement_date || 'N/A')}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error('Error fetching attached records for code:', commonCode, error);
+            drawerList.innerHTML = '<p class="output__empty" style="color:var(--red);">Failed to load attached records.</p>';
+        }
     }
 
     function renderRecent(recentMaterials) {
