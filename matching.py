@@ -41,7 +41,8 @@ def process_single_material(cpse_id: str, material_code: str, description: str, 
       4. Hand category + attributes + description to save_material_data,
          which runs the tiered match (item 5) before minting/reusing a
          code."""
-    descriptions = [description, specification]
+    descriptions = [description] + ([specification] if specification else [])
+    descriptions = [d.strip() for d in descriptions if d and d.strip()]
 
     category = classify_category(descriptions)
     if category == "Uncategorized":

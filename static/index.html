@@ -170,14 +170,10 @@
                                     </div>
                                 </div>
                                 <div class="field">
-                                    <label for="description">Material Description (Raw)</label>
-                                    <textarea id="description" name="description" rows="2" placeholder="e.g. SS 304 Seamless Pipe 2 inch Sch 40" required></textarea>
+                                    <label for="description">Material Description &amp; Specifications</label>
+                                    <textarea id="description" name="description" rows="4" placeholder="e.g. SS 304 Seamless Pipe 2 inch Sch 40, Stainless steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm" required></textarea>
                                 </div>
-                                <div class="field">
-                                    <label for="specification">Technical Specifications &amp; Uses</label>
-                                    <textarea id="specification" name="specification" rows="3" placeholder="e.g. Stainless steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm" required></textarea>
-                                </div>
-                                <p class="field-hint">💡 Auto-converts imperial units (2 inch &rarr; 50.8mm) and standardizes terminology (SS &harr; Stainless Steel).</p>
+                                <p class="field-hint">💡 Combine all material info here. Auto-converts imperial units (2 inch &rarr; 50.8mm) and standardizes terminology (SS &harr; Stainless Steel).</p>
                                 <button type="submit" id="submitBtn" class="btn-primary">
                                     ✓ Standardize &amp; Harmonize with CNMC
                                 </button>
@@ -189,7 +185,7 @@
                                     <label for="csvFile">Legacy CPSE CSV File</label>
                                     <div class="file-well">
                                         <input type="file" id="csvFile" name="csvFile" accept=".csv" required>
-                                        <p class="file-well__hint">Expected Headers: CPSE_ID, Material_Code, Description, Specification, Unit_of_Measure, Material_Type, Procurement_Date</p>
+                                        <p class="file-well__hint">Expected Headers: CPSE_ID, Material_Code, Description (combines raw description + specs), Unit_of_Measure, Material_Type, Procurement_Date</p>
                                     </div>
                                 </div>
                                 <p class="file-well__hint">Transactional Migration: Supports auto-validation, two-phase staging, and full batch rollback.</p>

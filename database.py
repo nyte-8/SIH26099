@@ -945,29 +945,56 @@ def get_material_codes() -> List[Dict]:
 
 
 def observe_category_candidate(text: str, threshold: int = 3) -> Optional[str]:
-    """Promote a recognizable new family after repeated Uncategorized inputs."""
-    from categories import suggested_category_for, suggested_category_definition
+    """Record observation of candidate category WITHOUT auto-promoting.
+    
+    Previously, categories would auto-promote once threshold was reached.
+    Now we only record observations; admin must explicitly approve via
+    /admin-categories/<name>/promote endpoint.
+    
+    This prevents category sprawl from typos or rare materials.
+    """
+    from categories import suggested_category_for
     category_name = suggested_category_for(text)
     if not category_name:
         return None
+    
     conn = get_connection()
-    conn.execute(
-        "INSERT INTO category_candidates (category_name, observation_count) VALUES (?, 1) "
-        "ON CONFLICT(category_name) DO UPDATE SET observation_count = observation_count + 1, last_observed = CURRENT_TIMESTAMP",
-        (category_name,),
-    )
-    count = conn.execute("SELECT observation_count FROM category_candidates WHERE category_name = ?", (category_name,)).fetchone()[0]
-    if count >= threshold:
-        register_category(category_name, suggested_category_definition(category_name))
-        conn.execute("UPDATE category_candidates SET promoted = 1 WHERE category_name = ?", (category_name,))
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        
+        # Record observation in candidates table
         conn.execute(
-            "INSERT INTO category_catalog (category_name, attributes, owner, approved) VALUES (?, ?, 'auto-promotion', 1) "
-            "ON CONFLICT(category_name) DO UPDATE SET attributes = excluded.attributes, approved = 1, updated_at = CURRENT_TIMESTAMP",
-            (category_name, json.dumps(suggested_category_definition(category_name))),
+            "INSERT INTO category_candidates (category_name, observation_count, promoted) VALUES (?, 1, 0) "
+            "ON CONFLICT(category_name) DO UPDATE SET observation_count = observation_count + 1, last_observed = CURRENT_TIMESTAMP, promoted = 0",
+            (category_name,),
         )
-    conn.commit()
-    conn.close()
-    return category_name if count >= threshold else None
+        
+        # Get current count
+        count = conn.execute(
+            "SELECT observation_count FROM category_candidates WHERE category_name = ?", 
+            (category_name,)
+        ).fetchone()[0]
+        
+        # Log for admin review (but DON'T promote)
+        if count >= threshold:
+            log_audit(
+                'category_candidate',
+                0,
+                'observation_threshold_reached',
+                None,
+                category_name,
+                'system',
+                details={'observation_count': count, 'requires_approval': True}
+            )
+        
+        conn.commit()
+        
+        # RETURN NONE: Never auto-promote
+        # Return category name only if admin will call /admin-categories/<name>/promote
+        return None
+        
+    finally:
+        conn.close()
 
 
 def save_category_definition(category_name: str, attributes: Dict = None, owner: str = "admin") -> Dict:

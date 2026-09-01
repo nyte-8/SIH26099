@@ -270,22 +270,23 @@ def _keyword_for_field(name: str) -> str:
     return name.replace("_", " ").strip()
 
 
-def _find_near_keyword(text_lower: str, keyword: str):
+def _find_near_keyword(text_lower: str, keyword: str, max_distance: int = 10):
     """Looks for a number sitting right next to `keyword`, in either order,
     within a short window -- e.g. 'nominal diameter 50mm' (keyword first)
     or '10mm thickness' (number first). Returns (value, unit) for whichever
-    pattern is found earliest in the text, or None if neither matches."""
+    pattern is found earliest in the text, or None if neither matches.
+    
+    Enhanced: Uses stricter matching with configurable max distance to avoid
+    grabbing wrong numbers from other clauses."""
     if not keyword:
         return None
     import re
     kw = re.escape(keyword)
-    # [^0-9,] (not just [^0-9]) so the window can't cross a comma -- commas
-    # separate distinct spec clauses in this data (e.g. "..., bore 25mm, OD
-    # 52mm, ..."), and without this a keyword can wrongly grab a number that
-    # actually belongs to the previous clause (e.g. "OD 52mm, width" would
-    # otherwise let 52 satisfy a search for "width").
-    forward = re.search(kw + r'[^0-9,]{0,15}(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)', text_lower)
-    backward = re.search(r'(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)[^0-9,]{0,15}' + kw, text_lower)
+    # [^0-9,] so the window can't cross a comma -- commas separate distinct
+    # spec clauses (e.g. "bore 25mm, OD 52mm"). Reduced default window from
+    # 15 to 10 chars for tighter matching.
+    forward = re.search(kw + r'[^0-9,]{0,' + str(max_distance) + r'}(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)', text_lower)
+    backward = re.search(r'(-?\d+(?:\.\d+)?)\s*([a-zA-Z"%]*)[^0-9,]{0,' + str(max_distance) + r'}' + kw, text_lower)
     candidates = [m for m in (forward, backward) if m]
     if not candidates:
         return None
@@ -364,11 +365,30 @@ def _extract_attributes_offline(schema: Dict, combined_text: str) -> Dict:
     # already carries an explicit, different unit (e.g. a stray "50mm") --
     # a number tagged with someone else's unit is a worse guess than one
     # with no unit at all for a field expecting yet another unit.
+    # ENHANCED: Skip values that are clearly too large/small for the field
+    # (e.g., skip 50 for a percentage field expecting 0-100).
     for name in numeric_fields:
         if result[name] is not None:
             continue
         unused = [i for i, used_flag in enumerate(used) if not used_flag]
-        unused.sort(key=lambda i: 0 if parsed_values[i][1] == "" else 1)
+        # Sort by: prefer bare units, then by value plausibility
+        def sort_key(i):
+            val, unit = parsed_values[i]
+            # Tier 1: bare units (unit == "")
+            bare_tier = 0 if unit == "" else 1
+            # Tier 2: reject obviously implausible values
+            # (e.g., percentage > 100, negative where not allowed)
+            canonical = schema[name].get("unit", "")
+            is_plausible = True
+            if canonical in {"pct", "%"}:
+                is_plausible = 0 <= val <= 100
+            elif canonical in {"bar", "psi", "mpa", "kpa"}:
+                is_plausible = val >= 0
+            # Return (bare_tier, is_plausible_tier, value_order)
+            plausible_tier = 0 if is_plausible else 1
+            return (bare_tier, plausible_tier, i)
+        
+        unused.sort(key=sort_key)
         if unused:
             i = unused[0]
             value, unit = parsed_values[i]

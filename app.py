@@ -113,7 +113,7 @@ def current_user():
     }), 200
 
 
-REQUIRED_IMPORT_HEADERS = {'CPSE_ID', 'Material_Code', 'Description', 'Specification'}
+REQUIRED_IMPORT_HEADERS = {'CPSE_ID', 'Material_Code', 'Description'}
 
 
 def _read_csv_upload(file_storage, mapping=None):
@@ -147,7 +147,6 @@ def _mapped_import_row(row, mapping):
         'CPSE_ID': value('CPSE_ID'),
         'Material_Code': value('Material_Code'),
         'Description': value('Description'),
-        'Specification': value('Specification'),
         'Unit_of_Measure': value('Unit_of_Measure') or None,
         'Material_Type': value('Material_Type') or None,
         'Procurement_Date': value('Procurement_Date') or None,
@@ -157,7 +156,7 @@ def _mapped_import_row(row, mapping):
 
 def _validate_import_row(row, index, seen):
     errors = []
-    for field in ('CPSE_ID', 'Material_Code', 'Description', 'Specification'):
+    for field in ('CPSE_ID', 'Material_Code', 'Description'):
         if not row.get(field):
             errors.append(f'{field} is required')
     identity = (row.get('CPSE_ID'), row.get('Material_Code'))
@@ -171,7 +170,7 @@ def _validate_import_row(row, index, seen):
 def _preview_import_row(row):
     from gemma_helper import classify_category, extract_attributes, generate_standard_info
     from database import find_matching_candidates
-    descriptions = [row['Description'], row['Specification']]
+    descriptions = [row['Description']]
     category = classify_category(descriptions)
     attributes, metadata = extract_attributes(category, descriptions, include_metadata=True)
     standard = generate_standard_info(descriptions)
@@ -204,7 +203,7 @@ def _process_import_batch(batch_id):
             else:
                 result = process_single_material(
                     cpse_id=payload['CPSE_ID'], material_code=payload['Material_Code'],
-                    description=payload['Description'], specification=payload['Specification'],
+                    description=payload['Description'], specification=payload.get('Specification', ''),
                     unit_of_measure=payload.get('Unit_of_Measure'), material_type=payload.get('Material_Type'),
                     procurement_date=payload.get('Procurement_Date'), source_system_id=batch['source_system_id'],
                     import_batch_id=batch_id, source_record_id=payload.get('Source_Record_ID') or str(row['row_number']),
@@ -303,7 +302,7 @@ def process_data():
     try:
         data = request.get_json(silent=True) or {}
 
-        required_fields = ['cpse_id', 'material_code', 'description', 'specification']
+        required_fields = ['cpse_id', 'material_code', 'description']
         missing = [f for f in required_fields if not data.get(f)]
         if missing:
             return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
@@ -312,7 +311,7 @@ def process_data():
             cpse_id=data['cpse_id'],
             material_code=data['material_code'],
             description=data['description'],
-            specification=data['specification'],
+            specification=data.get('specification', ''),  # Now optional
             unit_of_measure=data.get('unit_of_measure'),
             material_type=data.get('material_type'),
             procurement_date=data.get('procurement_date'),
@@ -375,6 +374,40 @@ def get_admin_categories():
         return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 
+@app.route('/admin-categories/candidates', methods=['GET'])
+def get_category_candidates():
+    """Return candidate categories awaiting admin approval.
+    
+    These are categories that appeared in Uncategorized materials and met
+    the observation threshold, but have NOT been auto-promoted (as of this fix).
+    
+    Admin must explicitly call /admin-categories/<name>/promote to activate.
+    """
+    try:
+        from database import get_connection
+        conn = get_connection()
+        candidates = conn.execute(
+            "SELECT category_name, observation_count, last_observed, promoted "
+            "FROM category_candidates WHERE promoted = 0 "
+            "ORDER BY observation_count DESC, last_observed DESC"
+        ).fetchall()
+        conn.close()
+        
+        return jsonify({
+            'candidates': [
+                {
+                    'name': row['category_name'],
+                    'observation_count': row['observation_count'],
+                    'last_observed': row['last_observed'],
+                    'status': 'pending_approval',
+                }
+                for row in candidates
+            ]
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Server Error: {str(e)}"}), 500
+
+
 @app.route('/material-codes', methods=['GET'])
 def list_material_codes():
     """Return stable material tokens and their observed usage."""
@@ -399,6 +432,84 @@ def create_admin_category():
         save_category_definition(category_name, data.get('attributes') or {}, data.get('owner', 'admin'))
         return jsonify({"status": "created" if category["created"] else "exists", "category": category}), 201
     except Exception as e:
+        return jsonify({"error": f"Server Error: {str(e)}"}), 500
+
+
+@app.route('/admin-categories/<category_name>/promote', methods=['POST'])
+def promote_category_candidate(category_name):
+    """Explicitly approve a candidate category for promotion.
+    
+    Categories are no longer auto-promoted; this endpoint must be called
+    to activate a candidate category (recorded via observe_category_candidate).
+    
+    Requires: reviewer or administrator role
+    """
+    try:
+        from database import get_connection, save_category_definition, log_audit
+        from categories import suggested_category_definition, register_category
+        
+        category_name = (category_name or '').strip()
+        if not category_name:
+            return jsonify({"error": "category_name is required"}), 400
+        
+        data = request.get_json(silent=True) or {}
+        attributes = data.get('attributes')
+        
+        conn = get_connection()
+        
+        # Verify it's a candidate
+        candidate = conn.execute(
+            "SELECT observation_count, promoted FROM category_candidates WHERE category_name = ?",
+            (category_name,)
+        ).fetchone()
+        
+        if not candidate:
+            conn.close()
+            return jsonify({"error": f"'{category_name}' is not a candidate category"}), 404
+        
+        if candidate['promoted']:
+            conn.close()
+            return jsonify({"error": f"'{category_name}' has already been promoted"}), 409
+        
+        # Use provided attributes or auto-suggested ones
+        if attributes is None:
+            attributes = suggested_category_definition(category_name) or {}
+        
+        # Promote it
+        register_category(category_name, attributes)
+        save_category_definition(category_name, attributes, _current_username())
+        
+        # Mark as promoted
+        conn.execute(
+            "UPDATE category_candidates SET promoted = 1 WHERE category_name = ?",
+            (category_name,)
+        )
+        
+        # Log the approval
+        log_audit(
+            'category_candidate',
+            0,
+            'promoted',
+            None,
+            category_name,
+            _current_username(),
+            details={'observation_count': candidate['observation_count'], 'approved_by': _current_username()}
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'status': 'promoted',
+            'category_name': category_name,
+            'attributes': attributes,
+            'promoted_by': _current_username(),
+            'observation_count': candidate['observation_count'],
+        }), 200
+    
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 
@@ -632,18 +743,35 @@ def reject_merge():
 
 
 # SAP MM integration note:
-# This export endpoint would map to SAP MARA/MARC material master tables via the
-# ERP-facing integration layer and is intended to be the canonical downstream API.
+# This export endpoint maps to SAP MARA/MARC material master tables via the
+# ERP-facing integration layer and is the canonical downstream API.
+# Supports multiple adapters (SAP, Oracle, generic HTTP, or simulated).
 @app.route('/api/v1/materials/export', methods=['GET'])
 def export_materials_api():
-    """Expose a versioned, paginated ERP contract; adapters can consume this payload."""
+    """Expose a versioned, paginated ERP contract with adapter-based transmission.
+    
+    Query Parameters:
+    - adapter: ERP adapter name (sap, oracle, http, demo) - default: demo
+    - page: Page number for pagination - default: 1
+    - per_page: Records per page - default: 100, max: 500
+    - transmit: Whether to actually transmit to ERP - default: false (export only)
+    
+    Returns:
+    - api_version, job, items (paginated materials), transmission status
+    """
     try:
         from database import create_integration_job, get_all_materials, update_integration_job
+        from erp_adapters import get_adapter, load_adapter_config
+        
         records = get_all_materials()
         page = max(request.args.get('page', 1, type=int), 1)
         per_page = min(max(request.args.get('per_page', 100, type=int), 1), 500)
         start = (page - 1) * per_page
-        job = create_integration_job(request.args.get('adapter', 'generic-erp'))
+        should_transmit = request.args.get('transmit', 'false').lower() == 'true'
+        adapter_name = request.args.get('adapter', 'demo')
+        
+        job = create_integration_job(adapter_name)
+        
         payload = [
             {
                 'material_id': row.get('id'),
@@ -661,9 +789,56 @@ def export_materials_api():
             }
             for row in records[start:start + per_page]
         ]
-        update_integration_job(job['job_id'], 'ready', acknowledgement='export-created')
-        return jsonify({'api_version': 'v1', 'job': job, 'page': page, 'per_page': per_page, 'total': len(records), 'has_next': start + per_page < len(records), 'items': payload}), 200
+        
+        transmission_status = None
+        transmission_message = None
+        
+        # Attempt transmission if requested
+        if should_transmit and payload:
+            adapter_config = load_adapter_config(adapter_name)
+            adapter = get_adapter(adapter_name, adapter_config)
+            
+            if adapter:
+                try:
+                    success, message = adapter.transmit(payload, job['job_id'])
+                    transmission_status = 'success' if success else 'partial_failure'
+                    transmission_message = message
+                    update_integration_job(
+                        job['job_id'],
+                        'acknowledged' if success else 'error',
+                        acknowledgement=message
+                    )
+                except Exception as e:
+                    transmission_status = 'error'
+                    transmission_message = str(e)
+                    update_integration_job(job['job_id'], 'error', error=str(e))
+            else:
+                transmission_status = 'adapter_not_found'
+                transmission_message = f"Adapter '{adapter_name}' not available"
+                update_integration_job(job['job_id'], 'error', error=transmission_message)
+        else:
+            transmission_status = 'export_only'
+            transmission_message = 'No transmission attempted (transmit=false)'
+            update_integration_job(job['job_id'], 'ready', acknowledgement='export-created')
+        
+        return jsonify({
+            'api_version': 'v1',
+            'job': job,
+            'page': page,
+            'per_page': per_page,
+            'total': len(records),
+            'has_next': start + per_page < len(records),
+            'transmission': {
+                'adapter': adapter_name,
+                'status': transmission_status,
+                'message': transmission_message,
+            },
+            'items': payload
+        }), 200
     except Exception as e:
+        import traceback
+        logger_error = traceback.format_exc()
+        print(f"Export error: {logger_error}")
         return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 
@@ -796,8 +971,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "ONGC",
         "Material_Code": "ONGC-PIP-101",
-        "Description": "SS 304 Seamless Pipe 2 inch Sch 40",
-        "Specification": "Stainless Steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm",
+        "Description": "SS 304 Seamless Pipe 2 inch Sch 40, Stainless Steel 304, 2 inch (50.8mm) diameter, Schedule 40, length 6000mm",
         "Unit_of_Measure": "MTR",
         "Material_Type": "Piping",
         "Procurement_Date": "2024-01-15"
@@ -805,8 +979,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "IOCL",
         "Material_Code": "IOCL-P-992",
-        "Description": "Pipe Stainless Steel 50mm Dia Sch40",
-        "Specification": "SS304 grade seamless piping, nominal diameter 50mm, wall schedule 40, 6m length",
+        "Description": "Pipe Stainless Steel 50mm Dia Sch40, SS304 grade seamless piping, nominal diameter 50mm, wall schedule 40, 6m length",
         "Unit_of_Measure": "M",
         "Material_Type": "Pipes & Tubes",
         "Procurement_Date": "2024-02-20"
@@ -814,8 +987,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "GAIL",
         "Material_Code": "GAIL-MAT-440",
-        "Description": "PIPE, SS, 50 MM NOMINAL BORE, SCH 40",
-        "Specification": "Stainless steel pipe 50mm NB sch 40 length 6000mm for gas processing unit",
+        "Description": "PIPE, SS, 50 MM NOMINAL BORE, SCH 40, Stainless steel pipe 50mm NB sch 40 length 6000mm for gas processing unit",
         "Unit_of_Measure": "NOS",
         "Material_Type": "Piping Materials",
         "Procurement_Date": "2024-03-10"
@@ -823,8 +995,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "ONGC",
         "Material_Code": "ONGC-VAL-502",
-        "Description": "Ball Valve 2 inch 150# Flanged SS316",
-        "Specification": "Full bore ball valve, size 50mm (2 inch), rating Class 150 (20 bar), SS316 body",
+        "Description": "Ball Valve 2 inch 150# Flanged SS316, Full bore ball valve, size 50mm (2 inch), rating Class 150 (20 bar), SS316 body",
         "Unit_of_Measure": "NOS",
         "Material_Type": "Valves",
         "Procurement_Date": "2024-01-18"
@@ -832,8 +1003,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "IOCL",
         "Material_Code": "IOCL-VLV-331",
-        "Description": "SS316 Ball Valve Size 50mm PN20 Flanged",
-        "Specification": "Stainless steel 316 flanged ball valve, 50mm nominal size, 20 bar pressure rating",
+        "Description": "SS316 Ball Valve Size 50mm PN20 Flanged, Stainless steel 316 flanged ball valve, 50mm nominal size, 20 bar pressure rating",
         "Unit_of_Measure": "EA",
         "Material_Type": "Valves & Fittings",
         "Procurement_Date": "2024-02-25"
@@ -841,8 +1011,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "BHEL",
         "Material_Code": "BHEL-FST-801",
-        "Description": "Hex Bolt M12 x 50mm Grade 8.8 High Tensile",
-        "Specification": "M12 hex head bolt, 50mm length, 12mm size, high tensile grade 8.8 carbon steel with nut",
+        "Description": "Hex Bolt M12 x 50mm Grade 8.8 High Tensile, M12 hex head bolt, 50mm length, 12mm size, high tensile grade 8.8 carbon steel with nut",
         "Unit_of_Measure": "SET",
         "Material_Type": "Fasteners",
         "Procurement_Date": "2024-01-22"
@@ -850,8 +1019,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "NTPC",
         "Material_Code": "NTPC-BOLT-104",
-        "Description": "Bolt Hexagonal 12mm x 50mm Gr 8.8 Carbon Steel",
-        "Specification": "Hex bolt 12mm dia, length 50mm, Grade 8.8 CS zinc plated for turbine casing",
+        "Description": "Bolt Hexagonal 12mm x 50mm Gr 8.8 Carbon Steel, Hex bolt 12mm dia, length 50mm, Grade 8.8 CS zinc plated for turbine casing",
         "Unit_of_Measure": "NOS",
         "Material_Type": "Hardware",
         "Procurement_Date": "2024-02-14"
@@ -859,8 +1027,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "SAIL",
         "Material_Code": "SAIL-CBL-603",
-        "Description": "XLPE Power Cable 3 Core 2.5 sqmm 1.1kV Copper",
-        "Specification": "3C x 2.5 sq mm copper conductor, XLPE insulated, PVC sheathed armored cable 1100V",
+        "Description": "XLPE Power Cable 3 Core 2.5 sqmm 1.1kV Copper, 3C x 2.5 sq mm copper conductor, XLPE insulated, PVC sheathed armored cable 1100V",
         "Unit_of_Measure": "MTR",
         "Material_Type": "Electrical",
         "Procurement_Date": "2024-03-01"
@@ -868,8 +1035,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "BHEL",
         "Material_Code": "BHEL-EL-209",
-        "Description": "Copper Cable 3C x 2.5mm2 1.1kV Armoured",
-        "Specification": "3 core copper electrical power cable, cross section 2.5 sqmm, voltage rating 1.1 kV",
+        "Description": "Copper Cable 3C x 2.5mm2 1.1kV Armoured, 3 core copper electrical power cable, cross section 2.5 sqmm, voltage rating 1.1 kV",
         "Unit_of_Measure": "M",
         "Material_Type": "Cables & Wiring",
         "Procurement_Date": "2024-03-12"
@@ -877,8 +1043,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "NTPC",
         "Material_Code": "NTPC-PMP-701",
-        "Description": "Centrifugal Water Pump 50 m3/hr Head 40m",
-        "Specification": "End suction centrifugal pump, flow rate 50 m3/h, head 40m, Cast Iron casing, 7.5kW motor",
+        "Description": "Centrifugal Water Pump 50 m3/hr Head 40m, End suction centrifugal pump, flow rate 50 m3/h, head 40m, Cast Iron casing, 7.5kW motor",
         "Unit_of_Measure": "SET",
         "Material_Type": "Pumps & Turbines",
         "Procurement_Date": "2024-02-28"
@@ -886,8 +1051,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "SAIL",
         "Material_Code": "SAIL-PLT-110",
-        "Description": "Mild Steel Plate 10mm x 1500mm x 3000mm IS 2062",
-        "Specification": "Structural mild steel plate, thickness 10mm, width 1500mm, length 3000mm, Grade E250",
+        "Description": "Mild Steel Plate 10mm x 1500mm x 3000mm IS 2062, Structural mild steel plate, thickness 10mm, width 1500mm, length 3000mm, Grade E250",
         "Unit_of_Measure": "TON",
         "Material_Type": "Plates & Sheets",
         "Procurement_Date": "2024-01-30"
@@ -895,8 +1059,7 @@ SAMPLE_CPSE_DATASET = [
     {
         "CPSE_ID": "GAIL",
         "Material_Code": "GAIL-GSK-905",
-        "Description": "Spiral Wound Gasket 50mm NB Class 150 SS316 / Graphite",
-        "Specification": "Metallic spiral wound gasket with inner ring, size 50mm, 150# rating, 316SS graphite filler",
+        "Description": "Spiral Wound Gasket 50mm NB Class 150 SS316 / Graphite, Metallic spiral wound gasket with inner ring, size 50mm, 150# rating, 316SS graphite filler",
         "Unit_of_Measure": "NOS",
         "Material_Type": "Gaskets",
         "Procurement_Date": "2024-03-15"
@@ -928,7 +1091,7 @@ def load_sample_dataset():
                 cpse_id=row['CPSE_ID'],
                 material_code=row['Material_Code'],
                 description=row['Description'],
-                specification=row['Specification'],
+                specification='',
                 unit_of_measure=row.get('Unit_of_Measure'),
                 material_type=row.get('Material_Type'),
                 procurement_date=row.get('Procurement_Date'),

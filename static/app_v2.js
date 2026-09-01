@@ -141,8 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const formData = {
             cpse_id: document.getElementById('cpse_id').value,
             material_code: document.getElementById('material_code').value,
-            description: document.getElementById('description').value,
-            specification: document.getElementById('specification').value
+            description: document.getElementById('description').value
         };
 
         try {
