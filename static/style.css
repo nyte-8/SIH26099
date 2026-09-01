@@ -1313,6 +1313,19 @@ button { font-family: inherit; }
 .modal-form { display: flex; flex-direction: column; gap: 12px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
 
+.auth-card { max-width: 420px; }
+.auth-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.auth-form .field { margin-bottom: 0; }
+.auth-hint {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 12px; color: var(--ink-soft); padding: 8px 10px; background: var(--canvas); border-radius: var(--radius-sm); border: 1px solid var(--line);
+}
+.user-chip {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px;
+    background: var(--green-tint); color: var(--green-ink); border: 1px solid rgba(31,138,84,.2); font-size: 12px; font-weight: 700;
+}
+.user-chip button { border: none; background: transparent; color: inherit; cursor: pointer; font-weight: 700; }
+
 /* ==========================================================================
    Responsive
    ========================================================================== */

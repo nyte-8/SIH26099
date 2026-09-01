@@ -446,6 +446,55 @@
         </div>
     </div>
 
+    <div id="loginModal" class="modal-backdrop" aria-modal="true" role="dialog">
+        <div class="modal-card auth-card">
+            <div class="auth-header">
+                <p class="eyebrow">Secure Access</p>
+                <h3>Material Master Login</h3>
+            </div>
+            <form id="loginForm" class="modal-form auth-form">
+                <div class="field">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" name="username" value="admin" autocomplete="username" required>
+                </div>
+                <div class="field">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" name="password" value="admin" autocomplete="current-password" required>
+                </div>
+                <div class="auth-hint">
+                    <span>Demo accounts:</span>
+                    <strong>admin / admin</strong>
+                    <span>or</span>
+                    <strong>user / user</strong>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary">Login</button>
+                    <button type="button" class="btn-secondary" id="useUserDemoBtn">Use user account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="newCodeModal" class="modal-backdrop hidden" aria-modal="true" role="dialog">
+        <div class="modal-card">
+            <div class="auth-header">
+                <p class="eyebrow">Review Decision</p>
+                <h3>Attach as New Code</h3>
+            </div>
+            <form id="newCodeForm" class="modal-form">
+                <input type="hidden" id="newCodeRecordId" name="record_id">
+                <div class="field">
+                    <label for="newCodeReason">Reason</label>
+                    <textarea id="newCodeReason" name="reason" rows="4" placeholder="This item appears to be a different material family, so it should be attached as a new code." required></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn-primary">Attach New Code</button>
+                    <button type="button" class="btn-secondary" id="cancelNewCodeBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="app_v2.js"></script>
 </body>
 </html>

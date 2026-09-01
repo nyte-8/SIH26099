@@ -1,5 +1,20 @@
 // static/app_v2.js - Unified Material Master Control Engine
 
+// Global CSRF token storage
+let csrfToken = null;
+
+// Helper to add CSRF token to fetch requests
+function secureFetch(url, options = {}) {
+    const opts = { ...options };
+    if (opts.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(opts.method.toUpperCase())) {
+        opts.headers = opts.headers || {};
+        if (csrfToken) {
+            opts.headers['X-CSRF-Token'] = csrfToken;
+        }
+    }
+    return fetch(url, opts);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // ============ UI Elements ============
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -24,6 +39,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const topbarTitle = document.getElementById('topbarTitle');
     const topbarKicker = document.getElementById('topbarKicker');
     const adminTabButton = document.querySelector('[data-tab="tab-admin"]');
+    const loginModal = document.getElementById('loginModal');
+    const newCodeModal = document.getElementById('newCodeModal');
+    const loginForm = document.getElementById('loginForm');
+    const newCodeForm = document.getElementById('newCodeForm');
+    const useUserDemoBtn = document.getElementById('useUserDemoBtn');
+    const cancelNewCodeBtn = document.getElementById('cancelNewCodeBtn');
+    const userBadge = document.createElement('div');
+    userBadge.className = 'user-chip';
+    userBadge.innerHTML = '<span>Not logged in</span>';
     
     // Stats & Hero
     const statTotalRecords = document.getElementById('statTotalRecords');
@@ -78,9 +102,54 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!canViewAdmin && document.getElementById('tab-admin')?.classList.contains('active')) {
                 document.querySelector('[data-tab="tab-upload"]')?.click();
             }
+            if (user.authenticated) {
+                const badge = document.querySelector('.user-chip');
+                if (badge) {
+                    badge.innerHTML = `<span>${escapeHtml(user.username || 'user')}</span><button type="button" id="logoutBtn">logout</button>`;
+                    const logoutBtn = document.getElementById('logoutBtn');
+                    if (logoutBtn) logoutBtn.addEventListener('click', logoutUser);
+                    if (loginModal) loginModal.classList.add('hidden');
+                }
+            } else if (loginModal) {
+                loginModal.classList.remove('hidden');
+            }
         } catch (error) {
             adminTabButton.hidden = false;
+            if (loginModal) loginModal.classList.remove('hidden');
         }
+    }
+
+    async function logoutUser() {
+        try {
+            await fetch('/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Logout failed', error);
+        }
+        const badge = document.querySelector('.user-chip');
+        if (badge) {
+            badge.innerHTML = '<span>Not logged in</span>';
+        }
+        if (loginModal) loginModal.classList.remove('hidden');
+        window.location.reload();
+    }
+
+    async function loginUser(username, password) {
+        const response = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Invalid username or password');
+        }
+        // Store CSRF token from login response
+        if (data.csrf_token) {
+            csrfToken = data.csrf_token;
+        }
+        if (loginModal) loginModal.classList.add('hidden');
+        await applyAccessVisibility();
+        return data;
     }
 
     // ============ Tab Navigation ============
@@ -130,6 +199,60 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    const topbarRight = document.querySelector('.topbar__right');
+    if (topbarRight && !document.querySelector('.user-chip')) {
+        topbarRight.appendChild(userBadge);
+    }
+
+    loginForm?.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        try {
+            await loginUser(username, password);
+        } catch (error) {
+            alert(error.message || 'Login failed');
+        }
+    });
+
+    useUserDemoBtn?.addEventListener('click', () => {
+        document.getElementById('loginUsername').value = 'user';
+        document.getElementById('loginPassword').value = 'user';
+        loginForm.requestSubmit();
+    });
+
+    newCodeForm?.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        const recordId = document.getElementById('newCodeRecordId').value;
+        const reason = document.getElementById('newCodeReason').value.trim();
+        if (!recordId || !reason) {
+            alert('Please add a reason before attaching a new code.');
+            return;
+        }
+        try {
+            const response = await secureFetch('/reject-merge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ record_id: Number(recordId), reason })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Unable to attach new code');
+            }
+            newCodeModal.classList.add('hidden');
+            newCodeForm.reset();
+            await loadPendingReview();
+            await loadRegistry();
+        } catch (error) {
+            alert(error.message || 'Could not attach a new code');
+        }
+    });
+
+    cancelNewCodeBtn?.addEventListener('click', () => {
+        newCodeModal.classList.add('hidden');
+        newCodeForm.reset();
+    });
+
     // ============ Single Entry Processing ============
     materialForm.addEventListener('submit', async function (event) {
         event.preventDefault();
@@ -145,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
         };
 
         try {
-            const response = await fetch('/process', {
+            const response = await secureFetch('/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -189,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function () {
         uploadResult.innerHTML = '';
 
         try {
-            const response = await fetch('/upload-csv', {
+            const response = await secureFetch('/upload-csv', {
                 method: 'POST',
                 body: formData
             });
@@ -220,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function () {
             uploadResult.innerHTML = '<div class="stat-card" style="padding:14px;"><p>Analyzing 12 items across ONGC, IOCL, GAIL, SAIL, BHEL, NTPC with 3-tier matching and SI normalization...</p></div>';
 
             try {
-                const response = await fetch('/api/v1/load-sample-dataset', {
+                const response = await secureFetch('/api/v1/load-sample-dataset', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -340,21 +463,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             const materials = Array.isArray(data) ? data : (data.materials || []);
 
-            // Populate categories in filter dropdown
-            const catResponse = await fetch('/admin-categories');
-            if (catResponse.ok) {
-                const catData = await catResponse.json();
-                if (registryCategoryFilter) {
-                    const currentVal = registryCategoryFilter.value;
-                    registryCategoryFilter.innerHTML = '<option value="">All categories</option>';
-                    (catData.categories || []).forEach(cat => {
-                        const opt = document.createElement('option');
-                        opt.value = cat;
-                        opt.textContent = cat;
-                        if (cat === currentVal) opt.selected = true;
-                        registryCategoryFilter.appendChild(opt);
-                    });
+            // Populate categories in filter dropdown (admin-only endpoint may be unavailable to normal users)
+            try {
+                const catResponse = await fetch('/admin-categories');
+                if (catResponse.ok) {
+                    const catData = await catResponse.json();
+                    if (registryCategoryFilter) {
+                        const currentVal = registryCategoryFilter.value;
+                        registryCategoryFilter.innerHTML = '<option value="">All categories</option>';
+                        (catData.categories || []).forEach(cat => {
+                            const opt = document.createElement('option');
+                            opt.value = cat;
+                            opt.textContent = cat;
+                            if (cat === currentVal) opt.selected = true;
+                            registryCategoryFilter.appendChild(opt);
+                        });
+                    }
                 }
+            } catch (error) {
+                // ignored for non-admin or restricted access
             }
 
             // Calculate metrics
@@ -777,6 +904,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const response = await fetch('/pending-review');
+            if (!response.ok) {
+                reviewQueue.innerHTML = `
+                    <div class="stat-card" style="padding:24px; text-align:center;">
+                        <span class="status-pill status-pill--warning" style="margin-bottom:8px;">ACCESS LIMITED</span>
+                        <h3>Review Queue Unavailable</h3>
+                        <p style="color:var(--ink-soft); margin-top:6px;">This view is reserved for the administrator role.</p>
+                    </div>
+                `;
+                return;
+            }
             const items = await response.json();
 
             if (!items || items.length === 0) {
@@ -882,9 +1019,15 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div style="font-size:12.5px; color:var(--ink-soft);">
                             Merging will link <strong>[${escapeHtml(item.cpse_id)}] ${escapeHtml(item.material_code)}</strong> to <strong>${escapeHtml(item.common_code)}</strong>.
                         </div>
+                        <div style="margin:10px 0; padding:10px 12px; border:1px solid rgba(255,170,0,.45); background:rgba(255,170,0,.08); border-radius:10px; color:var(--ink-soft); font-size:12.5px; line-height:1.5;">
+                            <strong>These codes seem similar.</strong> If this belongs to a different material family, attach a new code instead of merging.
+                        </div>
                         <div class="review-card__btns">
                             <button type="button" class="btn-primary" onclick="approveMerge('${escapeHtml(item.common_code)}')">
                                 ✓ Approve Consolidation to ${escapeHtml(item.common_code)}
+                            </button>
+                            <button type="button" class="btn-secondary" onclick="confirmAttachNewCode(${item.id})">
+                                🆕 Attach New Code
                             </button>
                             <button type="button" class="btn-secondary" onclick="rejectMerge(${item.id})">
                                 ✕ Reject &amp; Mint Distinct Code
@@ -902,7 +1045,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.approveMerge = async function (commonCode) {
         try {
-            const response = await fetch('/approve-merge', {
+            const response = await secureFetch('/approve-merge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ common_code: commonCode, reason: 'Approved by Lead Material Master Admin' })
@@ -916,12 +1059,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    window.rejectMerge = async function (recordId) {
+    window.confirmAttachNewCode = function (recordId) {
+        document.getElementById('newCodeRecordId').value = recordId;
+        document.getElementById('newCodeReason').value = 'These codes seem similar; this material belongs to a different family and should be attached as a new code.';
+        newCodeModal.classList.remove('hidden');
+    };
+
+    window.rejectMerge = async function (recordId, reasonOverride) {
         try {
-            const response = await fetch('/reject-merge', {
+            const reason = reasonOverride || 'Distinct specification required new CNMC code';
+            const response = await secureFetch('/reject-merge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ record_id: recordId, reason: 'Distinct specification required new CNMC code' })
+                body: JSON.stringify({ record_id: recordId, reason })
             });
             if (response.ok) {
                 await loadPendingReview();

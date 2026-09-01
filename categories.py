@@ -150,6 +150,39 @@ AUTO_CATEGORY_SUGGESTIONS = {
             "current_a": {"type": "numeric", "unit": "a", "tolerance": 0.10},
         },
     },
+    "Car": {
+        "keywords": ["car", "automobile", "vehicle", "sedan", "suv", "hatchback"],
+        "attributes": {
+            "vehicle_type": {"type": "string"},
+            "make": {"type": "string"},
+            "model": {"type": "string"},
+            "year": {"type": "numeric", "unit": "year", "tolerance": 0.0},
+        },
+    },
+    "Engine": {
+        "keywords": ["engine", "motor", "combustion", "diesel", "petrol"],
+        "attributes": {
+            "engine_type": {"type": "string"},
+            "displacement_cc": {"type": "numeric", "unit": "cc", "tolerance": 0.05},
+            "power_hp": {"type": "numeric", "unit": "hp", "tolerance": 0.05},
+        },
+    },
+    "Battery": {
+        "keywords": ["battery", "cell", "accumulator", "rechargeable"],
+        "attributes": {
+            "battery_type": {"type": "string"},
+            "voltage_v": {"type": "numeric", "unit": "v", "tolerance": 0.05},
+            "capacity_ah": {"type": "numeric", "unit": "ah", "tolerance": 0.05},
+        },
+    },
+    "Composite": {
+        "keywords": ["composite", "fiber", "carbon", "fiberglass", "laminate"],
+        "attributes": {
+            "composite_type": {"type": "string"},
+            "fiber_type": {"type": "string"},
+            "resin_type": {"type": "string"},
+        },
+    },
 }
 
 

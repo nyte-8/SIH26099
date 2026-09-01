@@ -21,8 +21,13 @@ except ImportError as e:
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.secret_key = os.environ.get('APP_SECRET_KEY', 'development-only-change-me')
-AUTH_ENABLED = os.environ.get('ENFORCE_AUTH', '0') == '1'
+AUTH_ENABLED = os.environ.get('ENFORCE_AUTH', '1') == '1'
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
+
+DEFAULT_CREDENTIALS = {
+    'admin': {'password': 'admin', 'role': 'administrator'},
+    'user': {'password': 'user', 'role': 'operator'},
+}
 
 # Make sure the DB/tables exist as soon as the server starts, so a fresh
 # checkout works with just `python app.py` -- no separate setup step needed.
@@ -83,15 +88,16 @@ def enforce_access_control():
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json(silent=True) or {}
-    expected_user = os.environ.get('APP_ADMIN_USER', 'admin')
-    expected_password = os.environ.get('APP_ADMIN_PASSWORD', 'admin')
-    if data.get('username') != expected_user or data.get('password') != expected_password:
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    credentials = DEFAULT_CREDENTIALS.get(username)
+    if not credentials or credentials.get('password') != password:
         return jsonify({'error': 'Invalid credentials'}), 401
     csrf_token = uuid4().hex
-    session['user'] = {'username': expected_user, 'role': 'administrator', 'cpse_ids': ['*']}
+    session['user'] = {'username': username, 'role': credentials['role'], 'cpse_ids': ['*'], 'authenticated': True}
     session['csrf_token'] = csrf_token
     from database import log_audit
-    log_audit('authentication', 0, 'login', None, expected_user, expected_user)
+    log_audit('authentication', 0, 'login', None, username, username)
     return jsonify({'status': 'authenticated', 'user': session['user'], 'csrf_token': csrf_token}), 200
 
 
@@ -106,9 +112,11 @@ def logout():
 
 @app.route('/me', methods=['GET'])
 def current_user():
-    user = _authenticated_user()
+    user = _authenticated_user() or {'authenticated': False}
+    if user.get('username'):
+        user['authenticated'] = True
     return jsonify({
-        **(user or {'authenticated': False}),
+        **user,
         'auth_enabled': AUTH_ENABLED,
     }), 200
 
